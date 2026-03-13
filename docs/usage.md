@@ -138,6 +138,9 @@ const hasPrev = await renderer.prev();
 
 // 跳转到目录项
 await renderer.goToTocItem(tocItem);
+
+// 通过 EPUB CFI 跳转到精确位置（支持 paginated 和 scrolled 模式）
+await renderer.goToCfi('epubcfi(/6/4!/4/2/1:0)');
 ```
 
 ### 阅读进度

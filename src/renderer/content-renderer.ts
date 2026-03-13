@@ -6,6 +6,8 @@ import type { EpubReader } from '../core/epub-parser';
 import { ImageResolver } from './image-resolver';
 import { StyleInjector } from './style-injector';
 import { Paginator } from './pagination';
+import { parseCfi, cfiStepToSpineIndex } from '../cfi/cfi-parser';
+import { resolveCfi } from '../cfi/cfi-resolver';
 import type { AnnotationManager } from '../annotations/annotation-manager';
 
 /** Derive a stable chapter container ID from a spine index. */
@@ -207,6 +209,22 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
         }
       }
     }
+  }
+
+  async goToCfi(cfi: string): Promise<void> {
+    const parsed = parseCfi(cfi);
+    const spineIndex = cfiStepToSpineIndex(parsed.spineStep.index);
+
+    if (spineIndex < 0 || spineIndex >= this.reader.spine.length) {
+      throw new Error(`CFI references invalid spine index: ${spineIndex}`);
+    }
+
+    if (spineIndex !== this.currentSpineIndex) {
+      await this.display(spineIndex);
+    }
+
+    const resolved = resolveCfi(cfi, this.contentEl);
+    this.scrollToNode(resolved.node, resolved.offset);
   }
 
   get pagination(): PaginationInfo {
@@ -532,6 +550,29 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     const page = Math.floor((rect.left - wrapperRect.left) / pageWidth);
     this.paginator.goToPage(page);
     this.updatePaginationInfo();
+  }
+
+  private scrollToNode(node: Node, offset: number): void {
+    const range = document.createRange();
+    const safeOffset = node.nodeType === Node.TEXT_NODE
+      ? Math.min(offset, (node as Text).length)
+      : Math.min(offset, node.childNodes.length);
+    range.setStart(node, safeOffset);
+    range.collapse(true);
+
+    const rect = range.getBoundingClientRect();
+
+    if (this.options.mode === 'paginated') {
+      const wrapperRect = this.wrapper.getBoundingClientRect();
+      const pageWidth = wrapperRect.width + this.paginator.columnGap;
+      const page = Math.floor((rect.left - wrapperRect.left) / pageWidth);
+      this.paginator.goToPage(page);
+      this.updatePaginationInfo();
+    } else {
+      const wrapperRect = this.wrapper.getBoundingClientRect();
+      this.wrapper.scrollTop += rect.top - wrapperRect.top;
+      this.updatePaginationInfo();
+    }
   }
 
   private waitForImages(): Promise<void> {

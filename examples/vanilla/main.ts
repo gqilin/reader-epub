@@ -354,3 +354,16 @@ document.getElementById('btn-clear-annotations')!.addEventListener('click', () =
     annotations.clearAllAnnotations();
   }
 });
+
+// CFI navigation
+document.getElementById('btn-go-cfi')!.addEventListener('click', async () => {
+  const input = document.getElementById('cfi-input') as HTMLInputElement;
+  const cfi = input.value.trim();
+  if (!cfi || !renderer) return;
+  try {
+    await renderer.goToCfi(cfi);
+  } catch (e) {
+    console.error('[CFI] Navigation failed:', e);
+    alert(`CFI navigation failed: ${e}`);
+  }
+});
