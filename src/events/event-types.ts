@@ -6,6 +6,15 @@ export interface EpubReaderEvents {
   'book:error': { error: Error };
 }
 
+export interface SelectionToolbarPosition {
+  /** Viewport-relative X (horizontal center of selection) */
+  x: number;
+  /** Viewport-relative Y (top edge of selection) */
+  y: number;
+  /** Full bounding rect of the selection in viewport coords */
+  selectionRect: { top: number; left: number; right: number; bottom: number };
+}
+
 export interface RendererEvents {
   'renderer:ready': undefined;
   'renderer:displayed': { spineIndex: number };
@@ -14,6 +23,12 @@ export interface RendererEvents {
   'renderer:selection': {
     text: string;
     range: Range;
+    cfiRange: { start: string; end: string };
+  };
+  'renderer:selection-toolbar': {
+    visible: boolean;
+    position: SelectionToolbarPosition | null;
+    text: string;
     cfiRange: { start: string; end: string };
   };
   'renderer:click': { event: MouseEvent };

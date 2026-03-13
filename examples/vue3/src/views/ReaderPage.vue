@@ -4,6 +4,8 @@ import SideBar from '../components/SideBar.vue';
 import ToolBar from '../components/ToolBar.vue';
 import ReaderView from '../components/ReaderView.vue';
 import FooterBar from '../components/FooterBar.vue';
+import RightPanel from '../components/RightPanel.vue';
+import SelectionToolbar from '../components/SelectionToolbar.vue';
 import { useEpubReader } from '../composables/useEpubReader';
 
 const epub = useEpubReader();
@@ -43,12 +45,10 @@ async function onSwitchMode(mode: 'paginated' | 'scrolled') {
     <div class="main">
       <ToolBar
         v-if="epub.isLoaded.value"
-        :current-mode="epub.currentMode.value"
         :selected-color="epub.selectedColor.value"
         :selected-underline-style="epub.selectedUnderlineStyle.value"
         :underline-color="epub.underlineColor.value"
         :highlight-custom-color="epub.highlightCustomColor.value"
-        :annotation-count="epub.annotationCount.value"
         @set-mode="epub.setAnnotationMode"
         @set-color="epub.setSelectedColor"
         @set-custom-color="epub.setCustomHighlightColor"
@@ -57,14 +57,6 @@ async function onSwitchMode(mode: 'paginated' | 'scrolled') {
         @highlight="epub.highlight"
         @underline="epub.underline"
         @add-note="epub.addNote"
-        @update-theme="epub.updateTheme"
-        @set-font-family="epub.setFontFamily"
-        @font-size-change="epub.setFontSize"
-        @set-line-height="epub.setLineHeight"
-        @switch-mode="onSwitchMode"
-        @export="epub.exportAnnotations"
-        @import="epub.importAnnotations"
-        @clear="epub.clearAnnotations"
         @go-cfi="epub.goToCfi"
       />
       <ReaderView
@@ -79,6 +71,37 @@ async function onSwitchMode(mode: 'paginated' | 'scrolled') {
         @next="epub.next"
       />
     </div>
+    <RightPanel
+      v-if="epub.isLoaded.value"
+      :annotation-list="epub.annotationList.value"
+      :annotation-count="epub.annotationCount.value"
+      :current-mode="epub.currentMode.value"
+      :theme-name="epub.themeName.value"
+      :font-family="epub.fontFamily.value"
+      :font-size="epub.fontSize.value"
+      :line-height="epub.lineHeight.value"
+      @go-to-annotation="epub.goToAnnotation"
+      @remove-annotation="epub.removeAnnotation"
+      @export-annotations="epub.exportAnnotations"
+      @import-annotations="epub.importAnnotations"
+      @clear-annotations="epub.clearAnnotations"
+      @update-theme="epub.updateTheme"
+      @set-font-family="epub.setFontFamily"
+      @set-font-size="epub.setFontSizeAbsolute"
+      @set-line-height="epub.setLineHeight"
+      @switch-mode="onSwitchMode"
+      @reset-theme="epub.resetTheme"
+    />
+    <SelectionToolbar
+      :visible="epub.selectionToolbar.value.visible"
+      :position="epub.selectionToolbar.value.position"
+      :selected-color="epub.selectedColor.value"
+      @highlight="epub.selectionHighlight"
+      @underline="epub.selectionUnderline"
+      @add-note="epub.selectionAddNote"
+      @copy="epub.selectionCopy"
+      @set-color="epub.setSelectedColor"
+    />
   </div>
 </template>
 

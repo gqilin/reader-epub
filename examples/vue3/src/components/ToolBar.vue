@@ -4,21 +4,14 @@ import {
   Pointer,
   EditPen,
   View,
-  Download,
-  UploadFilled,
-  Delete,
-  ArrowLeft,
-  ArrowRight,
 } from '@element-plus/icons-vue';
 import type { HighlightColor, UnderlineStyle } from 'epub-reader';
 
 defineProps<{
-  currentMode: 'paginated' | 'scrolled';
   selectedColor: HighlightColor;
   selectedUnderlineStyle: UnderlineStyle;
   underlineColor: string;
   highlightCustomColor: string;
-  annotationCount: number;
 }>();
 
 const emit = defineEmits<{
@@ -30,23 +23,12 @@ const emit = defineEmits<{
   highlight: [];
   underline: [];
   addNote: [];
-  updateTheme: [name: string];
-  setFontFamily: [family: string];
-  fontSizeChange: [delta: number];
-  setLineHeight: [lh: number];
-  switchMode: [mode: 'paginated' | 'scrolled'];
-  export: [];
-  import: [];
-  clear: [];
   goCfi: [cfi: string];
 }>();
 
 const activeAnnotationMode = ref<'select' | 'draw' | 'view'>('select');
 const activeColorName = ref<string>('yellow');
 const cfiInput = ref('');
-const themeValue = ref('light');
-const fontValue = ref('');
-const lineHeightValue = ref('1.8');
 const underlineStyleValue = ref<UnderlineStyle>('solid');
 
 function setAnnotationMode(mode: 'select' | 'draw' | 'view') {
@@ -59,30 +41,9 @@ function selectPresetColor(name: string) {
   emit('setColor', name as HighlightColor);
 }
 
-function onCustomColor(e: Event) {
-  const hex = (e.target as HTMLInputElement).value;
-  activeColorName.value = '';
-  emit('setCustomColor', hex);
-}
-
 function onUnderlineStyleChange(val: string) {
   underlineStyleValue.value = val as UnderlineStyle;
   emit('setUnderlineStyle', val as UnderlineStyle);
-}
-
-function onThemeChange(val: string) {
-  themeValue.value = val;
-  emit('updateTheme', val);
-}
-
-function onFontChange(val: string) {
-  fontValue.value = val;
-  emit('setFontFamily', val);
-}
-
-function onLineHeightChange(val: string) {
-  lineHeightValue.value = val;
-  emit('setLineHeight', parseFloat(val));
 }
 
 function onGoToCfi() {
@@ -104,15 +65,9 @@ const colorPresets = [
     <div class="toolbar-group">
       <span class="group-label">Mode:</span>
       <el-button-group size="small">
-        <el-button :type="activeAnnotationMode === 'select' ? 'primary' : ''" :icon="Pointer" @click="setAnnotationMode('select')">
-          Select
-        </el-button>
-        <el-button :type="activeAnnotationMode === 'draw' ? 'primary' : ''" :icon="EditPen" @click="setAnnotationMode('draw')">
-          Draw
-        </el-button>
-        <el-button :type="activeAnnotationMode === 'view' ? 'primary' : ''" :icon="View" @click="setAnnotationMode('view')">
-          View
-        </el-button>
+        <el-button :type="activeAnnotationMode === 'select' ? 'primary' : ''" :icon="Pointer" @click="setAnnotationMode('select')">Select</el-button>
+        <el-button :type="activeAnnotationMode === 'draw' ? 'primary' : ''" :icon="EditPen" @click="setAnnotationMode('draw')">Draw</el-button>
+        <el-button :type="activeAnnotationMode === 'view' ? 'primary' : ''" :icon="View" @click="setAnnotationMode('view')">View</el-button>
       </el-button-group>
     </div>
 
@@ -163,67 +118,6 @@ const colorPresets = [
       <el-button size="small" type="warning" @click="emit('highlight')">Highlight</el-button>
       <el-button size="small" type="danger" @click="emit('underline')">Underline</el-button>
       <el-button size="small" type="info" @click="emit('addNote')">Note</el-button>
-    </div>
-
-    <el-divider direction="vertical" />
-
-    <!-- Theme / Font -->
-    <div class="toolbar-group">
-      <span class="group-label">Theme:</span>
-      <el-select v-model="themeValue" size="small" style="width: 90px;" @change="onThemeChange">
-        <el-option label="Light" value="light" />
-        <el-option label="Dark" value="dark" />
-        <el-option label="Sepia" value="sepia" />
-      </el-select>
-    </div>
-
-    <div class="toolbar-group">
-      <span class="group-label">Font:</span>
-      <el-select v-model="fontValue" size="small" style="width: 110px;" @change="onFontChange">
-        <el-option label="Default" value="" />
-        <el-option label="Georgia" value="Georgia, serif" />
-        <el-option label="Courier" value="'Courier New', monospace" />
-        <el-option label="YaHei" value="'Microsoft YaHei', sans-serif" />
-      </el-select>
-      <el-button-group size="small">
-        <el-button @click="emit('fontSizeChange', -2)">A-</el-button>
-        <el-button @click="emit('fontSizeChange', 2)">A+</el-button>
-      </el-button-group>
-    </div>
-
-    <div class="toolbar-group">
-      <span class="group-label">Line:</span>
-      <el-select v-model="lineHeightValue" size="small" style="width: 75px;" @change="onLineHeightChange">
-        <el-option label="1.5" value="1.5" />
-        <el-option label="1.8" value="1.8" />
-        <el-option label="2.0" value="2" />
-        <el-option label="2.5" value="2.5" />
-      </el-select>
-    </div>
-
-    <el-divider direction="vertical" />
-
-    <!-- Reading mode -->
-    <div class="toolbar-group">
-      <span class="group-label">Reading:</span>
-      <el-button-group size="small">
-        <el-button :type="currentMode === 'paginated' ? 'primary' : ''" @click="emit('switchMode', 'paginated')">
-          Paginated
-        </el-button>
-        <el-button :type="currentMode === 'scrolled' ? 'primary' : ''" @click="emit('switchMode', 'scrolled')">
-          Scrolled
-        </el-button>
-      </el-button-group>
-    </div>
-
-    <el-divider direction="vertical" />
-
-    <!-- Annotation management -->
-    <div class="toolbar-group">
-      <el-button size="small" :icon="Download" @click="emit('export')">Export</el-button>
-      <el-button size="small" :icon="UploadFilled" @click="emit('import')">Import</el-button>
-      <el-button size="small" type="danger" plain :icon="Delete" @click="emit('clear')">Clear</el-button>
-      <el-tag size="small" type="info">{{ annotationCount }}</el-tag>
     </div>
 
     <el-divider direction="vertical" />

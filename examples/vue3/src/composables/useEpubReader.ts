@@ -1,4 +1,4 @@
-import { ref, shallowRef, type Ref } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { EpubReader } from 'epub-reader';
 import type {
   ContentRenderer,
@@ -10,6 +10,8 @@ import type {
   UnderlineStyle,
   PaginationInfo,
   AnnotationManager,
+  Annotation,
+  SelectionToolbarPosition,
 } from 'epub-reader';
 
 // Preset themes
@@ -50,8 +52,28 @@ export function useEpubReader() {
   const underlineColor = ref('#e74c3c');
   const highlightCustomColor = ref('#FF9800');
   const annotationCount = ref(0);
+  const annotationList = ref<Annotation[]>([]);
   const progressText = ref('Page 0 / 0');
   const activeTocId = ref('');
+
+  // Reading settings (reactive for UI binding)
+  const themeName = ref('light');
+  const fontFamily = ref('');
+  const fontSize = ref(16);
+  const lineHeight = ref(1.8);
+
+  // Selection toolbar state
+  const selectionToolbar = ref<{
+    visible: boolean;
+    position: SelectionToolbarPosition | null;
+    text: string;
+    cfiRange: { start: string; end: string };
+  }>({
+    visible: false,
+    position: null,
+    text: '',
+    cfiRange: { start: '', end: '' },
+  });
 
   // ── TOC helpers ─────────────────────────────────
 
@@ -127,10 +149,20 @@ export function useEpubReader() {
     try {
       const json = annotations.value.toJSON();
       localStorage.setItem(key, json);
-      annotationCount.value = annotations.value.getAllAnnotations().length;
+      refreshAnnotationList();
     } catch (e) {
       console.warn('[LocalStorage] Failed to save:', e);
     }
+  }
+
+  function refreshAnnotationList(): void {
+    if (!annotations.value) {
+      annotationList.value = [];
+      annotationCount.value = 0;
+      return;
+    }
+    annotationList.value = annotations.value.getAllAnnotations();
+    annotationCount.value = annotationList.value.length;
   }
 
   function loadAnnotationsFromLocal(): void {
@@ -139,11 +171,11 @@ export function useEpubReader() {
     try {
       const json = localStorage.getItem(key);
       if (!json) {
-        annotationCount.value = 0;
+        refreshAnnotationList();
         return;
       }
       annotations.value.fromJSON(json, 'merge');
-      annotationCount.value = annotations.value.getAllAnnotations().length;
+      refreshAnnotationList();
     } catch (e) {
       console.warn('[LocalStorage] Failed to load:', e);
     }
@@ -195,7 +227,7 @@ export function useEpubReader() {
     annotations.value.on('annotation:updated', () => saveAnnotationsToLocal());
     annotations.value.on('annotations:cleared', () => {
       clearLocalAnnotations();
-      annotationCount.value = 0;
+      refreshAnnotationList();
     });
     annotations.value.on('annotations:imported', () => saveAnnotationsToLocal());
 
@@ -212,6 +244,10 @@ export function useEpubReader() {
         progressText.value =
           `Chapter ${info.spineIndex + 1} / ${reader.value!.spine.length}  |  ${pct}%`;
       }
+    });
+
+    renderer.value.on('renderer:selection-toolbar', (data) => {
+      selectionToolbar.value = { ...data };
     });
 
     const spineIndex = Math.max(0, Math.min(prevSpineIndex, reader.value.spine.length - 1));
@@ -306,23 +342,66 @@ export function useEpubReader() {
   function updateTheme(name: string) {
     const preset = THEMES[name];
     if (preset && renderer.value) {
+      themeName.value = name;
       renderer.value.updateTheme(preset);
     }
   }
 
   function setFontFamily(family: string) {
+    fontFamily.value = family;
     renderer.value?.setFontFamily(family || 'inherit');
   }
 
   function setFontSize(delta: number) {
     if (!renderer.value) return;
-    const cur = renderer.value.getTheme().fontSize ?? 16;
+    const cur = fontSize.value;
     const next = cur + delta;
-    if (next >= 12 && next <= 32) renderer.value.setFontSize(next);
+    if (next >= 12 && next <= 32) {
+      fontSize.value = next;
+      renderer.value.setFontSize(next);
+    }
+  }
+
+  function setFontSizeAbsolute(size: number) {
+    if (!renderer.value) return;
+    if (size >= 12 && size <= 32) {
+      fontSize.value = size;
+      renderer.value.setFontSize(size);
+    }
   }
 
   function setLineHeight(lh: number) {
+    lineHeight.value = lh;
     renderer.value?.setLineHeight(lh);
+  }
+
+  function resetTheme() {
+    if (!renderer.value) return;
+    themeName.value = 'light';
+    fontFamily.value = '';
+    fontSize.value = 16;
+    lineHeight.value = 1.8;
+    renderer.value.updateTheme({
+      ...THEMES.light,
+      fontSize: 16,
+      lineHeight: 1.8,
+      padding: 24,
+    });
+    renderer.value.setFontFamily('inherit');
+  }
+
+  // ── Annotation navigation ─────────────────────
+  async function goToAnnotation(annotation: Annotation) {
+    if (!renderer.value) return;
+    if ('anchor' in annotation) {
+      await renderer.value.goToCfi(annotation.anchor.startCfi);
+    } else {
+      await renderer.value.display(annotation.spineIndex);
+    }
+  }
+
+  function removeAnnotation(id: string) {
+    annotations.value?.removeAnnotation(id);
   }
 
   async function goToCfi(cfi: string) {
@@ -337,6 +416,39 @@ export function useEpubReader() {
   function setCustomHighlightColor(hex: string) {
     selectedColor.value = { custom: hex };
     highlightCustomColor.value = hex;
+  }
+
+  // ── Selection toolbar actions ──────────────────
+  function selectionHighlight() {
+    annotations.value?.highlightSelection(selectedColor.value);
+  }
+
+  function selectionUnderline() {
+    annotations.value?.underlineSelection({
+      style: selectedUnderlineStyle.value,
+      color: underlineColor.value,
+    });
+  }
+
+  function selectionAddNote() {
+    const content = prompt('Enter note:');
+    if (content) {
+      annotations.value?.addNoteToSelection(content);
+    } else {
+      // User cancelled, dismiss toolbar
+      renderer.value?.dismissSelectionToolbar();
+    }
+  }
+
+  function selectionCopy() {
+    if (selectionToolbar.value.text) {
+      navigator.clipboard.writeText(selectionToolbar.value.text);
+    }
+    renderer.value?.dismissSelectionToolbar();
+  }
+
+  function dismissSelectionToolbar() {
+    renderer.value?.dismissSelectionToolbar();
   }
 
   return {
@@ -354,8 +466,14 @@ export function useEpubReader() {
     underlineColor,
     highlightCustomColor,
     annotationCount,
+    annotationList,
     progressText,
     activeTocId,
+    themeName,
+    fontFamily,
+    fontSize,
+    lineHeight,
+    selectionToolbar,
 
     // Methods
     loadFile,
@@ -374,9 +492,18 @@ export function useEpubReader() {
     updateTheme,
     setFontFamily,
     setFontSize,
+    setFontSizeAbsolute,
     setLineHeight,
+    resetTheme,
     goToCfi,
+    goToAnnotation,
+    removeAnnotation,
     setSelectedColor,
     setCustomHighlightColor,
+    selectionHighlight,
+    selectionUnderline,
+    selectionAddNote,
+    selectionCopy,
+    dismissSelectionToolbar,
   };
 }

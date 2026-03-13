@@ -7,6 +7,7 @@ import { ImageResolver } from './image-resolver';
 import { StyleInjector } from './style-injector';
 import { Paginator } from './pagination';
 import { parseCfi, cfiStepToSpineIndex } from '../cfi/cfi-parser';
+import { generateCfiRange } from '../cfi/cfi-generator';
 import { resolveCfi } from '../cfi/cfi-resolver';
 import type { AnnotationManager } from '../annotations/annotation-manager';
 
@@ -84,6 +85,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   async display(spineIndex: number): Promise<void> {
+    this.dismissSelectionToolbar();
     const resolved = this.reader.resolvedSpine[spineIndex];
     if (!resolved) {
       throw new Error(`Invalid spine index: ${spineIndex}`);
@@ -151,6 +153,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   async next(): Promise<boolean> {
+    this.dismissSelectionToolbar();
     if (this.options.mode === 'paginated') {
       if (this.paginator.nextPage()) {
         this.updatePaginationInfo();
@@ -166,6 +169,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   async prev(): Promise<boolean> {
+    this.dismissSelectionToolbar();
     if (this.options.mode === 'paginated') {
       if (this.paginator.prevPage()) {
         this.updatePaginationInfo();
@@ -192,6 +196,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   async goToTocItem(tocItem: TocItem): Promise<void> {
+    this.dismissSelectionToolbar();
     if (tocItem.spineIndex >= 0) {
       await this.display(tocItem.spineIndex);
       const fragment = tocItem.href.split('#')[1];
@@ -212,6 +217,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   async goToCfi(cfi: string): Promise<void> {
+    this.dismissSelectionToolbar();
     const parsed = parseCfi(cfi);
     const spineIndex = cfiStepToSpineIndex(parsed.spineStep.index);
 
@@ -449,17 +455,15 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   private setupSelectionListener(): void {
-    const handler = () => {
-      // ShadowRoot.getSelection() is non-standard but supported in Chrome
-      const sr = this.shadowRoot as unknown as { getSelection?: () => Selection | null };
-      const selection = sr.getSelection?.() ?? document.getSelection();
+    // Existing selectionchange handler for backward compat
+    const selectionChangeHandler = () => {
+      const selection = this.getContentSelection();
       if (!selection || selection.isCollapsed) return;
 
       const text = selection.toString().trim();
       if (!text) return;
 
       const range = selection.getRangeAt(0);
-      // Ensure the selection is inside our content
       if (!this.contentEl.contains(range.commonAncestorContainer)) return;
 
       this.emit('renderer:selection', {
@@ -469,12 +473,101 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       });
     };
 
-    document.addEventListener('selectionchange', handler);
-    // Store for cleanup
-    (this as unknown as Record<string, unknown>)._selectionHandler = handler;
+    document.addEventListener('selectionchange', selectionChangeHandler);
 
+    // mouseup: show floating toolbar after selection completes
+    const mouseupHandler = () => {
+      requestAnimationFrame(() => this.emitSelectionToolbar());
+    };
+    this.contentEl.addEventListener('mouseup', mouseupHandler);
+
+    // touchend: mobile support
+    const touchendHandler = () => {
+      setTimeout(() => this.emitSelectionToolbar(), 100);
+    };
+    this.contentEl.addEventListener('touchend', touchendHandler);
+
+    // click: dismiss toolbar when clicking without selection + emit click event
     this.contentEl.addEventListener('click', (event) => {
       this.emit('renderer:click', { event: event as MouseEvent });
+    });
+
+    // Store handlers for cleanup
+    const store = this as unknown as Record<string, unknown>;
+    store._selectionHandler = selectionChangeHandler;
+    store._mouseupHandler = mouseupHandler;
+    store._touchendHandler = touchendHandler;
+  }
+
+  /** Read the current selection from the Shadow DOM. */
+  private getContentSelection(): Selection | null {
+    const sr = this.shadowRoot as unknown as { getSelection?: () => Selection | null };
+    return sr.getSelection?.() ?? document.getSelection();
+  }
+
+  /** Compute toolbar position from the current selection and emit event. */
+  private emitSelectionToolbar(): void {
+    const selection = this.getContentSelection();
+    if (!selection || selection.isCollapsed) {
+      this.dismissSelectionToolbar();
+      return;
+    }
+
+    const text = selection.toString().trim();
+    if (!text) {
+      this.dismissSelectionToolbar();
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!this.contentEl.contains(range.commonAncestorContainer)) {
+      this.dismissSelectionToolbar();
+      return;
+    }
+
+    const rects = range.getClientRects();
+    if (rects.length === 0) {
+      this.dismissSelectionToolbar();
+      return;
+    }
+
+    // Compute bounding box from all client rects (viewport coords)
+    let top = Infinity, left = Infinity, right = -Infinity, bottom = -Infinity;
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i];
+      if (r.top < top) top = r.top;
+      if (r.left < left) left = r.left;
+      if (r.right > right) right = r.right;
+      if (r.bottom > bottom) bottom = r.bottom;
+    }
+
+    // Generate CFI range if possible
+    let cfiRange = { start: '', end: '' };
+    try {
+      cfiRange = generateCfiRange(range, this.currentSpineIndex, this.contentEl);
+    } catch {
+      // CFI generation may fail, continue without it
+    }
+
+    this.emit('renderer:selection-toolbar', {
+      visible: true,
+      position: {
+        x: (left + right) / 2,
+        y: top,
+        selectionRect: { top, left, right, bottom },
+      },
+      text,
+      cfiRange,
+    });
+  }
+
+  /** Hide the selection toolbar. */
+  dismissSelectionToolbar(): void {
+    this.emit('renderer:selection-toolbar', {
+      visible: false,
+      position: null,
+      text: '',
+      cfiRange: { start: '', end: '' },
     });
   }
 
@@ -493,11 +586,15 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       this.wrapper.removeEventListener('scroll', this.scrollHandler);
       this.scrollHandler = null;
     }
-    const selHandler = (this as unknown as Record<string, unknown>)._selectionHandler as
-      | (() => void)
-      | undefined;
-    if (selHandler) {
-      document.removeEventListener('selectionchange', selHandler);
+    const store = this as unknown as Record<string, (() => void) | undefined>;
+    if (store._selectionHandler) {
+      document.removeEventListener('selectionchange', store._selectionHandler);
+    }
+    if (store._mouseupHandler) {
+      this.contentEl.removeEventListener('mouseup', store._mouseupHandler);
+    }
+    if (store._touchendHandler) {
+      this.contentEl.removeEventListener('touchend', store._touchendHandler);
     }
   }
 

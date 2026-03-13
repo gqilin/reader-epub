@@ -52,5 +52,6 @@ export type {
   EpubReaderEvents,
   RendererEvents,
   AnnotationEvents,
+  SelectionToolbarPosition,
 } from './events/event-types';
 export type { Disposable } from './types/common';

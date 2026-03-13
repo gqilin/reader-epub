@@ -145,6 +145,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.highlightRenderer.render(annotation, rects, group.highlights);
     this.annotations.set(annotation.id, annotation);
     this.selectionHandler.clearSelection();
+    this.renderer.dismissSelectionToolbar();
     this.emit('annotation:created', { annotation });
     return annotation;
   }
@@ -182,6 +183,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.underlineRenderer.render(annotation, rects, group.underlines);
     this.annotations.set(annotation.id, annotation);
     this.selectionHandler.clearSelection();
+    this.renderer.dismissSelectionToolbar();
     this.emit('annotation:created', { annotation });
     return annotation;
   }
@@ -217,6 +219,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.noteRenderer.render(annotation, rects, group.notes);
     this.annotations.set(annotation.id, annotation);
     this.selectionHandler.clearSelection();
+    this.renderer.dismissSelectionToolbar();
     this.emit('annotation:created', { annotation });
     return annotation;
   }
