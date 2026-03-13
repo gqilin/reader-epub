@@ -4,6 +4,7 @@ import type {
   Annotation,
   HighlightAnnotation,
   UnderlineAnnotation,
+  UnderlineStyle,
   NoteAnnotation,
   DrawingAnnotation,
   HighlightColor,
@@ -151,7 +152,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
   underlineSelection(options?: {
     color?: string;
     strokeWidth?: number;
-    style?: 'solid' | 'dashed' | 'wavy';
+    style?: UnderlineStyle;
   }): UnderlineAnnotation | null {
     const selection = this.selectionHandler.getSelection();
     if (!selection) return null;

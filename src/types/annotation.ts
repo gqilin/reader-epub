@@ -24,12 +24,14 @@ export interface HighlightAnnotation extends AnnotationBase {
   opacity: number;
 }
 
+export type UnderlineStyle = 'solid' | 'dashed' | 'wavy' | 'strikethrough';
+
 export interface UnderlineAnnotation extends AnnotationBase {
   type: 'underline';
   anchor: TextAnchor;
   color: string;
   strokeWidth: number;
-  style: 'solid' | 'dashed' | 'wavy';
+  style: UnderlineStyle;
 }
 
 export interface NoteAnnotation extends AnnotationBase {

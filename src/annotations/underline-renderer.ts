@@ -12,9 +12,8 @@ export class UnderlineRenderer {
 
   render(annotation: UnderlineAnnotation, rects: DOMRect[], targetGroup: SVGGElement): void {
     for (const rect of rects) {
-      const y = rect.y + rect.height - 1;
-
       if (annotation.style === 'wavy') {
+        const y = rect.y + rect.height - 1;
         const path = this.createWavyPath(rect.x, y, rect.width);
         path.setAttribute('stroke', annotation.color);
         path.setAttribute('stroke-width', String(annotation.strokeWidth));
@@ -24,6 +23,11 @@ export class UnderlineRenderer {
         path.dataset.annotationId = annotation.id;
         targetGroup.appendChild(path);
       } else {
+        // solid / dashed / strikethrough all use <line>
+        const y = annotation.style === 'strikethrough'
+          ? rect.y + rect.height * 0.4
+          : rect.y + rect.height - 1;
+
         const line = document.createElementNS(SVG_NS, 'line');
         line.setAttribute('x1', String(rect.x));
         line.setAttribute('y1', String(y));

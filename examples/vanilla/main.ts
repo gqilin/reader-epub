@@ -1,12 +1,14 @@
 import { EpubReader } from '../../src/index';
 import type { ContentRenderer } from '../../src/renderer/content-renderer';
 import type { AnnotationManager } from '../../src/annotations/annotation-manager';
-import type { TocItem, HighlightColor, ReaderTheme } from '../../src/index';
+import type { TocItem, HighlightColor, ReaderTheme, UnderlineStyle } from '../../src/index';
 
 let reader: EpubReader | null = null;
 let renderer: ContentRenderer | null = null;
 let annotations: AnnotationManager | null = null;
 let selectedColor: HighlightColor = 'yellow';
+let useCustomHighlightColor = false;
+let selectedUnderlineStyle: UnderlineStyle = 'solid';
 let currentMode: 'paginated' | 'scrolled' = 'paginated';
 
 // ── localStorage helpers ─────────────────────────────────────
@@ -253,9 +255,23 @@ document.getElementById('btn-scrolled')!.addEventListener('click', async () => {
 document.querySelectorAll('.color-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     selectedColor = (btn as HTMLElement).dataset.color as HighlightColor;
+    useCustomHighlightColor = false;
     document.querySelectorAll('.color-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
   });
+});
+
+// Custom highlight color
+document.getElementById('highlight-custom-color')!.addEventListener('input', (e) => {
+  const hex = (e.target as HTMLInputElement).value;
+  selectedColor = { custom: hex };
+  useCustomHighlightColor = true;
+  document.querySelectorAll('.color-btn').forEach((b) => b.classList.remove('active'));
+});
+
+// Underline style selection
+document.getElementById('underline-style-select')!.addEventListener('change', (e) => {
+  selectedUnderlineStyle = (e.target as HTMLSelectElement).value as UnderlineStyle;
 });
 
 // Annotation actions
@@ -263,7 +279,8 @@ document.getElementById('btn-highlight')!.addEventListener('click', () => {
   annotations?.highlightSelection(selectedColor);
 });
 document.getElementById('btn-underline')!.addEventListener('click', () => {
-  annotations?.underlineSelection({ style: 'solid', color: '#e74c3c' });
+  const color = (document.getElementById('underline-color') as HTMLInputElement).value;
+  annotations?.underlineSelection({ style: selectedUnderlineStyle, color });
 });
 document.getElementById('btn-note')!.addEventListener('click', () => {
   const content = prompt('Enter note:');

@@ -276,7 +276,7 @@ const highlight = annotations.highlightSelection('yellow');
 const underline = annotations.underlineSelection({
   color: '#e74c3c',
   strokeWidth: 2,
-  style: 'solid',  // 'solid' | 'dashed' | 'wavy'
+  style: 'solid',  // 'solid' | 'dashed' | 'wavy' | 'strikethrough'
 });
 ```
 
@@ -369,7 +369,7 @@ interface UnderlineAnnotation extends AnnotationBase {
   anchor: { startCfi, endCfi, textContent };
   color: string;
   strokeWidth: number;
-  style: 'solid' | 'dashed' | 'wavy';
+  style: 'solid' | 'dashed' | 'wavy' | 'strikethrough';
 }
 
 // 笔记

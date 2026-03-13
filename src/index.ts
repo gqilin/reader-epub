@@ -34,6 +34,7 @@ export type {
   AnnotationBase,
   HighlightAnnotation,
   UnderlineAnnotation,
+  UnderlineStyle,
   NoteAnnotation,
   DrawingAnnotation,
   DrawingPath,
