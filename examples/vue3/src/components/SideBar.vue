@@ -10,6 +10,7 @@ defineProps<{
   bookAuthor: string;
   tocItems: TocItem[];
   isLoaded: boolean;
+  activeTocId: string;
 }>();
 
 const emit = defineEmits<{
@@ -18,7 +19,6 @@ const emit = defineEmits<{
 }>();
 
 const router = useRouter();
-const activeTocLabel = ref('');
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
 function triggerFileInput() {
@@ -31,7 +31,6 @@ function onFileChange(e: Event) {
 }
 
 function onTocClick(item: TocItem) {
-  activeTocLabel.value = item.label;
   emit('tocClick', item);
 }
 </script>
@@ -67,7 +66,7 @@ function onTocClick(item: TocItem) {
           :key="item.label"
           :item="item"
           :level="0"
-          :active-label="activeTocLabel"
+          :active-toc-id="activeTocId"
           @click-item="onTocClick"
         />
       </div>

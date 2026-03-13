@@ -36,6 +36,7 @@ async function onSwitchMode(mode: 'paginated' | 'scrolled') {
       :book-author="epub.bookAuthor.value"
       :toc-items="epub.tocItems.value"
       :is-loaded="epub.isLoaded.value"
+      :active-toc-id="epub.activeTocId.value"
       @load-file="onFileLoaded"
       @toc-click="epub.goToTocItem"
     />

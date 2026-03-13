@@ -51,7 +51,67 @@ export function useEpubReader() {
   const highlightCustomColor = ref('#FF9800');
   const annotationCount = ref(0);
   const progressText = ref('Page 0 / 0');
-  const activeTocHref = ref('');
+  const activeTocId = ref('');
+
+  // ── TOC helpers ─────────────────────────────────
+
+  /** Collect all TocItems matching a spineIndex (flat, depth-first order) */
+  function collectTocBySpineIndex(items: TocItem[], spineIndex: number): TocItem[] {
+    const result: TocItem[] = [];
+    for (const item of items) {
+      if (item.spineIndex === spineIndex) result.push(item);
+      if (item.children.length > 0) {
+        result.push(...collectTocBySpineIndex(item.children, spineIndex));
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Detect which TOC section is currently visible based on anchor positions.
+   * Checks each TOC item's fragment anchor in the rendered content,
+   * returns the last one whose anchor has scrolled past the viewport top.
+   */
+  function detectVisibleTocItem(spineIndex: number): TocItem | null {
+    if (!renderer.value) return null;
+
+    const candidates = collectTocBySpineIndex(tocItems.value, spineIndex);
+    if (candidates.length <= 1) return candidates[0] ?? null;
+
+    const shadowRoot = renderer.value.contentShadowRoot;
+    const wrapperRect = renderer.value.wrapperElement.getBoundingClientRect();
+
+    let best: TocItem | null = null;
+
+    for (const item of candidates) {
+      const fragment = item.href.split('#')[1];
+      if (!fragment) {
+        // No fragment = chapter root, always a candidate if nothing better found
+        if (!best) best = item;
+        continue;
+      }
+
+      const el = shadowRoot.getElementById(fragment)
+        ?? renderer.value.contentElement.querySelector(`[id="${CSS.escape(fragment)}"]`);
+      if (!el) continue;
+
+      const elRect = el.getBoundingClientRect();
+
+      if (renderer.value.mode === 'paginated') {
+        // In paginated mode: anchor is "visible" if its left edge is within the wrapper's horizontal bounds
+        if (elRect.left >= wrapperRect.left && elRect.left < wrapperRect.right) {
+          best = item;
+        }
+      } else {
+        // In scroll mode: anchor is "passed" if its top edge is at or above the wrapper top + small offset
+        if (elRect.top <= wrapperRect.top + 10) {
+          best = item;
+        }
+      }
+    }
+
+    return best;
+  }
 
   // ── localStorage helpers ──────────────────────
   function getStorageKey(): string | null {
@@ -140,6 +200,10 @@ export function useEpubReader() {
     annotations.value.on('annotations:imported', () => saveAnnotationsToLocal());
 
     renderer.value.on('renderer:paginated', (info: PaginationInfo) => {
+      // Detect the most specific visible TOC section
+      const match = detectVisibleTocItem(info.spineIndex);
+      if (match) activeTocId.value = match.id;
+
       if (m === 'paginated') {
         progressText.value =
           `Page ${info.currentPage + 1} / ${info.totalPages}  |  Chapter ${info.spineIndex + 1} / ${reader.value!.spine.length}`;
@@ -174,6 +238,7 @@ export function useEpubReader() {
 
   async function goToTocItem(item: TocItem) {
     if (renderer.value) {
+      activeTocId.value = item.id;
       await renderer.value.goToTocItem(item);
     }
   }
@@ -290,7 +355,7 @@ export function useEpubReader() {
     highlightCustomColor,
     annotationCount,
     progressText,
-    activeTocHref,
+    activeTocId,
 
     // Methods
     loadFile,

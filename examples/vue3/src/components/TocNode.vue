@@ -4,7 +4,7 @@ import type { TocItem } from 'epub-reader';
 const props = defineProps<{
   item: TocItem;
   level: number;
-  activeLabel: string;
+  activeTocId: string;
 }>();
 
 const emit = defineEmits<{
@@ -24,7 +24,7 @@ function onChildClick(child: TocItem) {
   <div>
     <div
       class="toc-item"
-      :class="{ nested: level > 0, active: activeLabel === item.label }"
+      :class="{ nested: level > 0, active: item.id === activeTocId }"
       :style="{ paddingLeft: (16 + level * 16) + 'px' }"
       @click="onClick"
     >
@@ -36,7 +36,7 @@ function onChildClick(child: TocItem) {
         :key="child.label"
         :item="child"
         :level="level + 1"
-        :active-label="activeLabel"
+        :active-toc-id="activeTocId"
         @click-item="onChildClick"
       />
     </template>
