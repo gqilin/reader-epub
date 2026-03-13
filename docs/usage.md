@@ -36,6 +36,7 @@ const reader = await EpubReader.fromFile(file);       // File API
 // const reader = await EpubReader.fromUrl(url);       // URL（打包 .epub）
 // const reader = await EpubReader.fromRemoteUrl(url); // 远程解包 EPUB
 // const reader = await EpubReader.fromArrayBuffer(buf); // ArrayBuffer
+// const reader = await EpubReader.fromArchive(archive); // 自定义 Archive 实现
 
 // 2. 获取书籍信息
 console.log(reader.metadata.title);
@@ -65,7 +66,7 @@ await renderer.prev();
 
 ## 加载 EPUB
 
-支持四种加载方式：
+支持五种加载方式：
 
 ```typescript
 // 文件选择器
@@ -94,6 +95,80 @@ const reader = await EpubReader.fromArrayBuffer(buffer);
 `fromRemoteUrl` 适用于服务端已将 EPUB 解压为目录结构的场景。传入 `container.xml` 或 `.opf` 文件的 URL，库会自动推导其他资源路径并按需拉取。底层使用 `RemoteArchive` 类通过 HTTP 逐个加载所需文件，无需一次性下载整个 EPUB。
 
 `fromUrl` 也支持自动检测：当 URL 以 `container.xml` 或 `.opf` 结尾时，会自动切换为远程解包模式。
+
+### 自定义 Archive（加密章节、自定义 API 等）
+
+`fromArchive` 允许传入自定义的 `IEpubArchive` 实现，适用于以下场景：
+
+- 章节内容需要通过后端 API 获取并解密
+- 需要自定义鉴权、缓存、重试等逻辑
+- 对接非标准存储（WebDAV、IndexedDB、Service Worker 等）
+
+```typescript
+import { EpubReader, type IEpubArchive } from 'epub-reader';
+
+// 实现自定义 Archive
+class EncryptedRemoteArchive implements IEpubArchive {
+  constructor(
+    private apiBase: string,
+    private baseUrl: string,
+    private bookId: string,
+    private decryptFn: (data: ArrayBuffer) => ArrayBuffer
+  ) {}
+
+  async readText(path: string): Promise<string> {
+    if (this.isChapterContent(path)) {
+      // 章节内容走加密 API
+      const resp = await fetch(`${this.apiBase}/content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId: this.bookId, path }),
+      });
+      const encrypted = await resp.arrayBuffer();
+      const decrypted = this.decryptFn(encrypted);
+      return new TextDecoder().decode(decrypted);
+    }
+    // 非章节文件（container.xml、OPF、CSS 等）直接获取
+    return (await fetch(`${this.baseUrl}/${path}`)).text();
+  }
+
+  async readBinary(path: string): Promise<ArrayBuffer> {
+    if (this.isChapterContent(path)) {
+      const resp = await fetch(`${this.apiBase}/content`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookId: this.bookId, path }),
+      });
+      return this.decryptFn(await resp.arrayBuffer());
+    }
+    return (await fetch(`${this.baseUrl}/${path}`)).arrayBuffer();
+  }
+
+  async readBlob(path: string, mimeType: string): Promise<Blob> {
+    const buffer = await this.readBinary(path);
+    return new Blob([buffer], { type: mimeType });
+  }
+
+  private isChapterContent(path: string): boolean {
+    return /\.(xhtml|html)$/i.test(path);
+  }
+}
+
+// 使用
+const archive = new EncryptedRemoteArchive(
+  'https://api.example.com',
+  'https://cdn.example.com/books/123',
+  'book-123',
+  (encrypted) => myDecrypt(encrypted, secretKey)
+);
+
+// opfPath 可选：不传则自动通过 archive 读取 container.xml 解析
+const reader = await EpubReader.fromArchive(archive);
+// 或指定 OPF 路径跳过 container.xml 解析
+const reader2 = await EpubReader.fromArchive(archive, 'OEBPS/content.opf');
+```
+
+SDK 内部的全部 EPUB 解析（container.xml → OPF → spine → TOC）和渲染逻辑不变，调用方只需实现「文件怎么读」的策略。
 
 ## 元数据
 
@@ -160,6 +235,7 @@ EpubReader.fromFile(file: File): Promise<EpubReader>
 EpubReader.fromUrl(url: string, fetchOptions?: RequestInit): Promise<EpubReader>
 EpubReader.fromRemoteUrl(entryUrl: string, fetchOptions?: RequestInit): Promise<EpubReader>
 EpubReader.fromArrayBuffer(buffer: ArrayBuffer): Promise<EpubReader>
+EpubReader.fromArchive(archive: IEpubArchive, opfPath?: string): Promise<EpubReader>
 
 // 实例属性（只读）
 reader.metadata      // EpubMetadata — 书籍元数据

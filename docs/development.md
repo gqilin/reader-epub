@@ -105,7 +105,7 @@ interface IEpubArchive {
 ### 1.3 解析流程
 
 ```
-EpubReader.fromFile(file) / fromUrl(url) / fromRemoteUrl(url)
+EpubReader.fromFile(file) / fromUrl(url) / fromRemoteUrl(url) / fromArchive(archive)
     │
     ▼
 ┌─ epub-archive.ts 或 remote-archive.ts ──────────┐
@@ -709,7 +709,49 @@ dist/
 
 ### 7.4 自定义归档实现
 
-实现 `IEpubArchive` 接口即可对接自定义的文件加载方式（如 Service Worker 缓存、WebDAV 等）。
+实现 `IEpubArchive` 接口即可对接自定义的文件加载方式，然后通过 `EpubReader.fromArchive(archive)` 创建阅读器。
+
+典型场景：加密章节获取、自定义 API、Service Worker 缓存、WebDAV 等。
+
+```
+┌─────────────────────────────────────────┐
+│  SDK 内部（不需要改动）                    │
+│  container.xml → OPF → Spine → TOC      │
+│  → 渲染 → 标注                           │
+└──────────────┬──────────────────────────┘
+               │ 所有文件读取通过
+               ▼
+┌─────────────────────────────────────────┐
+│  IEpubArchive 接口                       │
+│  readText(path)                          │
+│  readBinary(path)                        │
+│  readBlob(path, mimeType)                │
+└─────────────────────────────────────────┘
+               ▲
+               │ 调用方实现
+               │
+┌─────────────────────────────────────────┐
+│  自定义 Archive                          │
+│  - 章节 .xhtml → 后端加密 API + 解密     │
+│  - 其他文件 → 直接 fetch / 本地读取       │
+└─────────────────────────────────────────┘
+```
+
+```typescript
+import { EpubReader, type IEpubArchive } from 'epub-reader';
+
+class MyArchive implements IEpubArchive {
+  async readText(path: string): Promise<string> {
+    // 自定义获取逻辑（加密 API、缓存等）
+  }
+  async readBinary(path: string): Promise<ArrayBuffer> { ... }
+  async readBlob(path: string, mimeType: string): Promise<Blob> { ... }
+}
+
+const reader = await EpubReader.fromArchive(new MyArchive());
+```
+
+详细用法和加密示例见 [使用文档 - 自定义 Archive](./usage.md#自定义-archive加密章节自定义-api-等)。
 
 ### 7.5 框架集成
 

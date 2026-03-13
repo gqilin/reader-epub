@@ -120,6 +120,21 @@ export class EpubReader extends TypedEventEmitter<EpubReaderEvents> {
     return { baseUrl, opfPath: opfFileName };
   }
 
+  /**
+   * 从自定义 IEpubArchive 实现创建阅读器。
+   * 适用于需要自定义内容获取逻辑的场景（如加密章节、自定义 API 等）。
+   * @param archive 自定义的 IEpubArchive 实现
+   * @param opfPath 可选的 OPF 文件路径；不传则自动读取 META-INF/container.xml 解析
+   */
+  static async fromArchive(
+    archive: IEpubArchive,
+    opfPath?: string
+  ): Promise<EpubReader> {
+    const reader = new EpubReader(archive);
+    await reader.parse(opfPath);
+    return reader;
+  }
+
   static async fromArrayBuffer(buffer: ArrayBuffer): Promise<EpubReader> {
     const archive = await EpubArchive.open(buffer);
     const reader = new EpubReader(archive);
