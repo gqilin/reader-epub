@@ -1,15 +1,15 @@
-import type { EpubArchive } from './epub-archive';
+import type { IEpubArchive } from '../types/archive';
 import type { ManifestItem } from '../types/epub';
 import { resolveHref } from './xml-utils';
 
 export class ResourceResolver {
-  private archive: EpubArchive;
+  private archive: IEpubArchive;
   private opfDir: string;
   private manifest: Map<string, ManifestItem>;
   private blobUrlCache = new Map<string, string>();
 
   constructor(
-    archive: EpubArchive,
+    archive: IEpubArchive,
     opfDir: string,
     manifest: Map<string, ManifestItem>
   ) {

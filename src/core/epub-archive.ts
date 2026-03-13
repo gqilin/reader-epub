@@ -1,6 +1,7 @@
 import JSZip from 'jszip';
+import type { IEpubArchive } from '../types/archive';
 
-export class EpubArchive {
+export class EpubArchive implements IEpubArchive {
   private zip: JSZip;
 
   private constructor(zip: JSZip) {

@@ -1,6 +1,8 @@
 // Core
 export { EpubReader } from './core/epub-parser';
 export { ResourceResolver } from './core/resource-resolver';
+export { RemoteArchive } from './core/remote-archive';
+export type { IEpubArchive } from './types/archive';
 
 // Renderer
 export { ContentRenderer, getChapterId } from './renderer/content-renderer';

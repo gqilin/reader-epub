@@ -1,4 +1,5 @@
 import { EpubArchive } from './epub-archive';
+import { RemoteArchive } from './remote-archive';
 import { parseContainer } from './container-parser';
 import { parseOpf } from './opf-parser';
 import { parseNcx } from './ncx-parser';
@@ -6,6 +7,7 @@ import { parseNav } from './nav-parser';
 import { resolveSpine, type ResolvedSpineItem } from './spine-resolver';
 import { ResourceResolver } from './resource-resolver';
 import { TypedEventEmitter } from '../events/event-emitter';
+import type { IEpubArchive } from '../types/archive';
 import type { EpubReaderEvents } from '../events/event-types';
 import type {
   EpubMetadata,
@@ -17,7 +19,7 @@ import type { TocItem } from '../types/toc';
 import type { RendererOptions } from '../types/renderer';
 
 export class EpubReader extends TypedEventEmitter<EpubReaderEvents> {
-  private _archive: EpubArchive;
+  private _archive: IEpubArchive;
   private _metadata!: EpubMetadata;
   private _manifest!: Map<string, ManifestItem>;
   private _spine!: SpineItem[];
@@ -27,7 +29,7 @@ export class EpubReader extends TypedEventEmitter<EpubReaderEvents> {
   private _resources!: ResourceResolver;
   private _opfDir!: string;
 
-  private constructor(archive: EpubArchive) {
+  private constructor(archive: IEpubArchive) {
     super();
     this._archive = archive;
   }
@@ -41,12 +43,81 @@ export class EpubReader extends TypedEventEmitter<EpubReaderEvents> {
     url: string,
     fetchOptions?: RequestInit
   ): Promise<EpubReader> {
+    // Detect remote (unpacked) EPUB by entry file extension
+    if (/container\.xml(\?|#|$)/i.test(url) || /\.opf(\?|#|$)/i.test(url)) {
+      return EpubReader.fromRemoteUrl(url, fetchOptions);
+    }
     const response = await fetch(url, fetchOptions);
     if (!response.ok) {
       throw new Error(`Failed to fetch EPUB: ${response.status} ${response.statusText}`);
     }
     const buffer = await response.arrayBuffer();
     return EpubReader.fromArrayBuffer(buffer);
+  }
+
+  /**
+   * Load an unpacked (directory-based) EPUB from a remote server.
+   * @param entryUrl URL to container.xml or a .opf file
+   * @param fetchOptions Optional fetch options forwarded to every HTTP request
+   */
+  static async fromRemoteUrl(
+    entryUrl: string,
+    fetchOptions?: RequestInit
+  ): Promise<EpubReader> {
+    let baseUrl: string;
+    let opfPath: string | undefined;
+
+    if (/container\.xml(\?|#|$)/i.test(entryUrl)) {
+      // URL points to META-INF/container.xml
+      const idx = entryUrl.indexOf('META-INF/container.xml');
+      baseUrl = idx > 0 ? entryUrl.substring(0, idx) : entryUrl.substring(0, entryUrl.lastIndexOf('/') + 1);
+    } else if (/\.opf(\?|#|$)/i.test(entryUrl)) {
+      // URL points to a .opf file — try to locate the epub root
+      const found = await EpubReader.resolveEpubRoot(entryUrl, fetchOptions);
+      baseUrl = found.baseUrl;
+      opfPath = found.opfPath;
+    } else {
+      // Treat as epub root directory
+      baseUrl = entryUrl.endsWith('/') ? entryUrl : entryUrl + '/';
+    }
+
+    const archive = new RemoteArchive(baseUrl, fetchOptions);
+    const reader = new EpubReader(archive);
+    await reader.parse(opfPath);
+    return reader;
+  }
+
+  /**
+   * Given a .opf URL, try to find the epub root by searching upward for META-INF/container.xml.
+   * If found, returns the baseUrl and the opfPath as listed in container.xml.
+   * If not found, falls back to using the .opf's parent directory as the base.
+   */
+  private static async resolveEpubRoot(
+    opfUrl: string,
+    fetchOptions?: RequestInit
+  ): Promise<{ baseUrl: string; opfPath?: string }> {
+    const urlObj = new URL(opfUrl);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+
+    // Try each ancestor directory (from opf's parent upward)
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+      const candidateBase = urlObj.origin + '/' + pathParts.slice(0, i).join('/') + '/';
+      const containerUrl = candidateBase + 'META-INF/container.xml';
+      try {
+        const resp = await fetch(containerUrl, fetchOptions);
+        if (resp.ok) {
+          return { baseUrl: candidateBase };
+        }
+      } catch {
+        // continue searching upward
+      }
+    }
+
+    // Fallback: use the .opf's parent directory as base, skip container.xml
+    const lastSlash = opfUrl.lastIndexOf('/');
+    const baseUrl = opfUrl.substring(0, lastSlash + 1);
+    const opfFileName = opfUrl.substring(lastSlash + 1).replace(/[?#].*$/, '');
+    return { baseUrl, opfPath: opfFileName };
   }
 
   static async fromArrayBuffer(buffer: ArrayBuffer): Promise<EpubReader> {
@@ -56,13 +127,18 @@ export class EpubReader extends TypedEventEmitter<EpubReaderEvents> {
     return reader;
   }
 
-  private async parse(): Promise<void> {
+  private async parse(knownOpfPath?: string): Promise<void> {
     try {
-      // 1. Parse container.xml
-      const containerXml = await this._archive.readText(
-        'META-INF/container.xml'
-      );
-      const opfPath = parseContainer(containerXml);
+      // 1. Determine OPF path
+      let opfPath: string;
+      if (knownOpfPath) {
+        opfPath = knownOpfPath;
+      } else {
+        const containerXml = await this._archive.readText(
+          'META-INF/container.xml'
+        );
+        opfPath = parseContainer(containerXml);
+      }
       this._opfDir = opfPath.includes('/')
         ? opfPath.substring(0, opfPath.lastIndexOf('/'))
         : '';
