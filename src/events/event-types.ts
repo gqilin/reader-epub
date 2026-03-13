@@ -32,6 +32,11 @@ export interface RendererEvents {
     cfiRange: { start: string; end: string };
   };
   'renderer:click': { event: MouseEvent };
+  'renderer:link-click': {
+    href: string;
+    isExternal: boolean;
+    event: MouseEvent;
+  };
   'renderer:error': { error: Error };
 }
 

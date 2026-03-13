@@ -375,6 +375,117 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
   // ── Private ───────────────────────────────────────────────
 
+  /**
+   * Intercept <a> tag clicks inside epub content.
+   * - Fragment-only links (#id): scroll within the current chapter
+   * - Internal cross-chapter links (chapter2.xhtml#section): navigate to that chapter
+   * - External links (http://...): emit event and open in new tab
+   */
+  private handleLinkClick(event: MouseEvent): void {
+    // Walk up from event target to find the closest <a> element
+    let target = event.target as HTMLElement | null;
+    while (target && target !== this.contentEl) {
+      if (target.tagName === 'A') break;
+      target = target.parentElement;
+    }
+    if (!target || target.tagName !== 'A') return;
+
+    const href = target.getAttribute('href');
+    if (!href) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    // External link
+    if (/^https?:\/\//i.test(href) || /^mailto:/i.test(href)) {
+      this.emit('renderer:link-click', { href, isExternal: true, event });
+      window.open(href, '_blank', 'noopener');
+      return;
+    }
+
+    this.emit('renderer:link-click', { href, isExternal: false, event });
+
+    // Fragment-only link (#footnote1) — same chapter
+    if (href.startsWith('#')) {
+      const fragment = href.substring(1);
+      this.scrollToFragment(fragment);
+      return;
+    }
+
+    // Internal epub link — resolve to spine index
+    this.navigateToHref(href);
+  }
+
+  /**
+   * Scroll to a fragment (element by id) within the currently displayed chapter.
+   */
+  private scrollToFragment(fragment: string): void {
+    const el = this.shadowRoot.getElementById(fragment)
+      ?? this.contentEl.querySelector(`[id="${CSS.escape(fragment)}"]`);
+    if (!el) return;
+
+    if (this.options.mode === 'paginated') {
+      this.scrollToElement(el);
+    } else {
+      const elRect = el.getBoundingClientRect();
+      const wrapperRect = this.wrapper.getBoundingClientRect();
+      this.wrapper.scrollTop += elRect.top - wrapperRect.top;
+      this.updatePaginationInfo();
+    }
+  }
+
+  /**
+   * Resolve an internal epub href (e.g. "chapter2.xhtml#section1") to a spine index
+   * and navigate to it.
+   */
+  private async navigateToHref(href: string): Promise<void> {
+    const [filePart, fragment] = href.split('#');
+    const currentChapterHref = this.reader.resolvedSpine[this.currentSpineIndex]?.href ?? '';
+
+    // Resolve relative href against the current chapter's path
+    const resolvedHref = filePart
+      ? resolveHref(currentChapterHref, filePart)
+      : currentChapterHref;
+
+    // Find matching spine index
+    const spineIndex = this.findSpineIndexByHref(resolvedHref);
+    if (spineIndex < 0) return;
+
+    if (spineIndex === this.currentSpineIndex && fragment) {
+      // Same chapter, just scroll to fragment
+      this.scrollToFragment(fragment);
+      return;
+    }
+
+    await this.display(spineIndex);
+    if (fragment) {
+      this.scrollToFragment(fragment);
+    }
+  }
+
+  /**
+   * Find spine index by matching the resolved href against spine items.
+   * Tries exact match first, then filename-only match for robustness.
+   */
+  private findSpineIndexByHref(href: string): number {
+    const spine = this.reader.resolvedSpine;
+
+    // Exact match
+    for (let i = 0; i < spine.length; i++) {
+      if (spine[i].href === href) return i;
+    }
+
+    // Filename-only match (strip directory prefix)
+    const hrefFilename = href.includes('/') ? href.substring(href.lastIndexOf('/') + 1) : href;
+    for (let i = 0; i < spine.length; i++) {
+      const spineHref = spine[i].href;
+      const spineFilename = spineHref.includes('/') ? spineHref.substring(spineHref.lastIndexOf('/') + 1) : spineHref;
+      if (spineFilename === hrefFilename) return i;
+    }
+
+    return -1;
+  }
+
   private applyStyles(): void {
     const rect = this.wrapper.getBoundingClientRect();
 
@@ -537,8 +648,9 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     };
     this.contentEl.addEventListener('touchend', touchendHandler);
 
-    // click: dismiss toolbar when clicking without selection + emit click event
+    // click: dismiss toolbar when clicking without selection + handle links + emit click event
     this.contentEl.addEventListener('click', (event) => {
+      this.handleLinkClick(event as MouseEvent);
       this.emit('renderer:click', { event: event as MouseEvent });
     });
 
