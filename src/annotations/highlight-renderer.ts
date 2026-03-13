@@ -24,10 +24,8 @@ export class HighlightRenderer {
     this.layer = layer;
   }
 
-  render(annotation: HighlightAnnotation, rects: DOMRect[]): void {
+  render(annotation: HighlightAnnotation, rects: DOMRect[], targetGroup: SVGGElement): void {
     const color = resolveColor(annotation.color);
-    const group = this.layer.highlights;
-    console.log('[HighlightRenderer] render() rects:', rects.length, 'color:', color, 'opacity:', annotation.opacity);
 
     for (const rect of rects) {
       const rectEl = document.createElementNS(SVG_NS, 'rect');
@@ -41,18 +39,11 @@ export class HighlightRenderer {
       rectEl.style.pointerEvents = 'all';
       rectEl.style.cursor = 'pointer';
       rectEl.dataset.annotationId = annotation.id;
-      group.appendChild(rectEl);
-      console.log('[HighlightRenderer] appended rect:', { x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+      targetGroup.appendChild(rectEl);
     }
-
-    console.log('[HighlightRenderer] SVG group children count:', group.children.length);
-    console.log('[HighlightRenderer] SVG element in DOM:', group.closest('svg')?.isConnected);
   }
 
   remove(annotationId: string): void {
-    const elements = this.layer.highlights.querySelectorAll(
-      `[data-annotation-id="${annotationId}"]`
-    );
-    elements.forEach((el) => el.remove());
+    this.layer.removeById(annotationId);
   }
 }

@@ -10,7 +10,9 @@ import type {
   AnnotationStore,
 } from '../types/annotation';
 import type { ContentRenderer } from '../renderer/content-renderer';
+import { getChapterId } from '../renderer/content-renderer';
 import { AnnotationLayer } from './annotation-layer';
+import type { ChapterSvgGroup } from './annotation-layer';
 import { TextSelectionHandler } from './text-selection-handler';
 import { HighlightRenderer } from './highlight-renderer';
 import { UnderlineRenderer } from './underline-renderer';
@@ -35,6 +37,9 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
   private interactionHandler: InteractionHandler;
   private annotations = new Map<string, Annotation>();
   private _mode: InteractionMode = 'select';
+
+  /** Maps chapterId → the chapter's DOM root element (for CFI resolution). */
+  private chapterRoots = new Map<string, HTMLElement>();
 
   constructor(renderer: ContentRenderer) {
     super();
@@ -68,11 +73,18 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     });
   }
 
+  // ── Mode ────────────────────────────────────────────────────
+
   setMode(mode: InteractionMode): void {
     this._mode = mode;
     this.interactionHandler.setMode(mode);
 
     if (mode === 'draw') {
+      // Point drawing renderer at the current chapter's drawings group
+      const chapterId = this.renderer.chapterId;
+      const group = this.layer.getChapterGroup(chapterId);
+      this.drawingRenderer.setTargetGroup(group?.drawings ?? null);
+
       this.drawingRenderer.startListening((paths, width, height) => {
         const annotation: DrawingAnnotation = {
           id: uuid(),
@@ -80,6 +92,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           spineIndex: this.renderer.spineIndex,
+          chapterId,
           paths,
           viewportWidth: width,
           viewportHeight: height,
@@ -89,6 +102,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
         this.emit('annotation:drawing:end', { annotation });
       });
     } else {
+      this.drawingRenderer.setTargetGroup(null);
       this.drawingRenderer.stopListening();
     }
   }
@@ -97,17 +111,18 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     return this._mode;
   }
 
+  // ── Create annotations from current selection ───────────────
+
   highlightSelection(
     color: HighlightColor = 'yellow',
     opacity = 0.35
   ): HighlightAnnotation | null {
-    console.log('[AnnotationManager] highlightSelection() called, color:', color);
     const selection = this.selectionHandler.getSelection();
-    console.log('[AnnotationManager] selection result:', selection ? `text="${selection.text.substring(0, 50)}"` : 'null');
-    if (!selection) {
-      console.log('[AnnotationManager] ❌ No selection, returning null');
-      return null;
-    }
+    if (!selection) return null;
+
+    const chapterId = this.renderer.chapterId;
+    const group = this.layer.getChapterGroup(chapterId);
+    if (!group) return null;
 
     const annotation: HighlightAnnotation = {
       id: uuid(),
@@ -115,6 +130,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       spineIndex: this.renderer.spineIndex,
+      chapterId,
       anchor: {
         startCfi: selection.cfiRange.start,
         endCfi: selection.cfiRange.end,
@@ -125,10 +141,8 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     };
 
     const rects = this.layer.getRangeRects(selection.range);
-    console.log('[AnnotationManager] highlight rects count:', rects.length);
-    this.highlightRenderer.render(annotation, rects);
+    this.highlightRenderer.render(annotation, rects, group.highlights);
     this.annotations.set(annotation.id, annotation);
-    console.log('[AnnotationManager] ✓ Highlight created, id:', annotation.id);
     this.selectionHandler.clearSelection();
     this.emit('annotation:created', { annotation });
     return annotation;
@@ -139,13 +153,12 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     strokeWidth?: number;
     style?: 'solid' | 'dashed' | 'wavy';
   }): UnderlineAnnotation | null {
-    console.log('[AnnotationManager] underlineSelection() called');
     const selection = this.selectionHandler.getSelection();
-    console.log('[AnnotationManager] selection result:', selection ? `text="${selection.text.substring(0, 50)}"` : 'null');
-    if (!selection) {
-      console.log('[AnnotationManager] ❌ No selection, returning null');
-      return null;
-    }
+    if (!selection) return null;
+
+    const chapterId = this.renderer.chapterId;
+    const group = this.layer.getChapterGroup(chapterId);
+    if (!group) return null;
 
     const annotation: UnderlineAnnotation = {
       id: uuid(),
@@ -153,6 +166,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       spineIndex: this.renderer.spineIndex,
+      chapterId,
       anchor: {
         startCfi: selection.cfiRange.start,
         endCfi: selection.cfiRange.end,
@@ -164,10 +178,8 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     };
 
     const rects = this.layer.getRangeRects(selection.range);
-    console.log('[AnnotationManager] underline rects count:', rects.length);
-    this.underlineRenderer.render(annotation, rects);
+    this.underlineRenderer.render(annotation, rects, group.underlines);
     this.annotations.set(annotation.id, annotation);
-    console.log('[AnnotationManager] ✓ Underline created, id:', annotation.id);
     this.selectionHandler.clearSelection();
     this.emit('annotation:created', { annotation });
     return annotation;
@@ -180,12 +192,17 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     const selection = this.selectionHandler.getSelection();
     if (!selection) return null;
 
+    const chapterId = this.renderer.chapterId;
+    const group = this.layer.getChapterGroup(chapterId);
+    if (!group) return null;
+
     const annotation: NoteAnnotation = {
       id: uuid(),
       type: 'note',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       spineIndex: this.renderer.spineIndex,
+      chapterId,
       anchor: {
         startCfi: selection.cfiRange.start,
         endCfi: selection.cfiRange.end,
@@ -196,7 +213,7 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     };
 
     const rects = this.layer.getRangeRects(selection.range);
-    this.noteRenderer.render(annotation, rects);
+    this.noteRenderer.render(annotation, rects, group.notes);
     this.annotations.set(annotation.id, annotation);
     this.selectionHandler.clearSelection();
     this.emit('annotation:created', { annotation });
@@ -216,6 +233,8 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.drawingRenderer.setOptions(options);
   }
 
+  // ── Query ───────────────────────────────────────────────────
+
   getAnnotation(id: string): Annotation | undefined {
     return this.annotations.get(id);
   }
@@ -230,23 +249,24 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     );
   }
 
+  getAnnotationsForChapter(chapterId: string): Annotation[] {
+    return this.getAllAnnotations().filter(
+      (a) => a.chapterId === chapterId
+    );
+  }
+
+  // ── Remove ──────────────────────────────────────────────────
+
   removeAnnotation(id: string): boolean {
     const annotation = this.annotations.get(id);
     if (!annotation) return false;
 
-    switch (annotation.type) {
-      case 'highlight':
-        this.highlightRenderer.remove(id);
-        break;
-      case 'underline':
-        this.underlineRenderer.remove(id);
-        break;
-      case 'note':
-        this.noteRenderer.remove(id);
-        break;
-      case 'drawing':
-        this.drawingRenderer.remove(id);
-        break;
+    // Remove SVG elements
+    this.layer.removeById(id);
+
+    // Type-specific cleanup
+    if (annotation.type === 'note') {
+      this.noteRenderer.remove(id);
     }
 
     this.annotations.delete(id);
@@ -260,60 +280,62 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.emit('annotations:cleared', undefined);
   }
 
+  // ── Chapter lifecycle ───────────────────────────────────────
+
   /**
-   * Called by ContentRenderer when a chapter is displayed.
-   * Re-renders annotations for the current spine item.
+   * Called when a chapter's DOM is mounted (rendered into the page).
+   * Creates the chapter's SVG group and renders its annotations.
+   *
+   * In single-chapter mode, the previous chapter is automatically unmounted.
+   * In lazy-loading mode, multiple chapters can be mounted simultaneously.
    */
-  onChapterDisplayed(spineIndex: number): void {
-    // In scrolled mode, sync SVG layer size to match full content height
+  onChapterMounted(spineIndex: number, rootElement: HTMLElement): void {
+    const chapterId = getChapterId(spineIndex);
+
+    // In current single-chapter mode: unmount all others first
+    for (const [id] of this.chapterRoots) {
+      if (id !== chapterId) {
+        this.onChapterUnmounted(this.chapterIdToSpineIndex(id));
+      }
+    }
+
+    // Register this chapter's DOM root
+    this.chapterRoots.set(chapterId, rootElement);
+
+    // Sync SVG size in scrolled mode
     if (this.renderer.mode === 'scrolled') {
       this.layer.syncSize();
     }
-    this.layer.clearAll();
-    const chapterAnnotations = this.getAnnotationsForSpine(spineIndex);
-    for (const annotation of chapterAnnotations) {
-      this.renderExistingAnnotation(annotation);
+
+    // Mount SVG group and render annotations
+    const group = this.layer.mountChapter(chapterId);
+    this.renderChapterAnnotations(spineIndex, chapterId, rootElement, group);
+
+    // If in draw mode, update target group
+    if (this._mode === 'draw') {
+      this.drawingRenderer.setTargetGroup(group.drawings);
     }
   }
 
-  private renderExistingAnnotation(annotation: Annotation): void {
-    if (annotation.type === 'drawing') {
-      this.drawingRenderer.renderAnnotation(annotation);
-      return;
-    }
-
-    // Text-based annotations: resolve CFI to Range relative to contentElement
-    const root = this.renderer.contentElement;
-
-    console.log('[AnnotationManager] renderExisting:', annotation.type, annotation.id);
-    console.log('[AnnotationManager]   startCfi:', annotation.anchor.startCfi);
-    console.log('[AnnotationManager]   endCfi:', annotation.anchor.endCfi);
-    console.log('[AnnotationManager]   root:', root.tagName, root.className, 'children:', root.childNodes.length);
-
-    const range = cfiRangeToRange(
-      annotation.anchor.startCfi,
-      annotation.anchor.endCfi,
-      root
-    );
-
-    console.log('[AnnotationManager]   range resolved:', range ? 'yes' : 'null');
-    if (!range) return;
-
-    const rects = this.layer.getRangeRects(range);
-    console.log('[AnnotationManager]   rects:', rects.length);
-
-    switch (annotation.type) {
-      case 'highlight':
-        this.highlightRenderer.render(annotation, rects);
-        break;
-      case 'underline':
-        this.underlineRenderer.render(annotation, rects);
-        break;
-      case 'note':
-        this.noteRenderer.render(annotation, rects);
-        break;
-    }
+  /**
+   * Called when a chapter's DOM is destroyed (e.g. scrolled out of view
+   * in lazy-loading mode). Removes SVG elements but keeps annotation data.
+   */
+  onChapterUnmounted(spineIndex: number): void {
+    const chapterId = getChapterId(spineIndex);
+    this.chapterRoots.delete(chapterId);
+    this.layer.unmountChapter(chapterId);
   }
+
+  /**
+   * @deprecated Use onChapterMounted / onChapterUnmounted instead.
+   */
+  onChapterDisplayed(spineIndex: number): void {
+    const rootElement = this.renderer.contentElement;
+    this.onChapterMounted(spineIndex, rootElement);
+  }
+
+  // ── Import / Export ─────────────────────────────────────────
 
   exportAnnotations(): AnnotationStore {
     return AnnotationSerializer.serialize(
@@ -331,11 +353,21 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     }
 
     for (const annotation of store.annotations) {
+      // Ensure chapterId exists (backwards compatibility with old data)
+      if (!annotation.chapterId) {
+        annotation.chapterId = getChapterId(annotation.spineIndex);
+      }
       this.annotations.set(annotation.id, annotation);
     }
 
-    // Re-render current chapter
-    this.onChapterDisplayed(this.renderer.spineIndex);
+    // Re-render all currently mounted chapters
+    for (const [chapterId, rootElement] of this.chapterRoots) {
+      const spineIndex = this.chapterIdToSpineIndex(chapterId);
+      const group = this.layer.mountChapter(chapterId);
+      this.clearChapterSvg(group);
+      this.renderChapterAnnotations(spineIndex, chapterId, rootElement, group);
+    }
+
     this.emit('annotations:imported', { count: store.annotations.length });
   }
 
@@ -348,10 +380,75 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     this.importAnnotations(store, strategy);
   }
 
+  // ── Lifecycle ───────────────────────────────────────────────
+
   destroy(): void {
     this.drawingRenderer.stopListening();
     this.noteRenderer.destroy();
     this.layer.destroy();
+    this.chapterRoots.clear();
     this.removeAllListeners();
+  }
+
+  // ── Private ─────────────────────────────────────────────────
+
+  private renderChapterAnnotations(
+    spineIndex: number,
+    chapterId: string,
+    rootElement: HTMLElement,
+    group: ChapterSvgGroup
+  ): void {
+    const chapterAnnotations = this.getAnnotationsForSpine(spineIndex);
+    for (const annotation of chapterAnnotations) {
+      // Update chapterId if it was missing (old data)
+      if (!annotation.chapterId) {
+        annotation.chapterId = chapterId;
+      }
+      this.renderExistingAnnotation(annotation, rootElement, group);
+    }
+  }
+
+  private renderExistingAnnotation(
+    annotation: Annotation,
+    rootElement: HTMLElement,
+    group: ChapterSvgGroup
+  ): void {
+    if (annotation.type === 'drawing') {
+      this.drawingRenderer.renderAnnotation(annotation, group.drawings);
+      return;
+    }
+
+    // Text-based annotations: resolve CFI to Range relative to rootElement
+    const range = cfiRangeToRange(
+      annotation.anchor.startCfi,
+      annotation.anchor.endCfi,
+      rootElement
+    );
+    if (!range) return;
+
+    const rects = this.layer.getRangeRects(range);
+
+    switch (annotation.type) {
+      case 'highlight':
+        this.highlightRenderer.render(annotation, rects, group.highlights);
+        break;
+      case 'underline':
+        this.underlineRenderer.render(annotation, rects, group.underlines);
+        break;
+      case 'note':
+        this.noteRenderer.render(annotation, rects, group.notes);
+        break;
+    }
+  }
+
+  private clearChapterSvg(group: ChapterSvgGroup): void {
+    for (const g of [group.highlights, group.underlines, group.notes, group.drawings]) {
+      while (g.firstChild) g.removeChild(g.firstChild);
+    }
+  }
+
+  private chapterIdToSpineIndex(chapterId: string): number {
+    // Inverse of getChapterId: "epub-spine-3" → 3
+    return parseInt(chapterId.replace('epub-spine-', ''), 10);
   }
 }

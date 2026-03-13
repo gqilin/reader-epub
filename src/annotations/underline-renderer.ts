@@ -10,10 +10,7 @@ export class UnderlineRenderer {
     this.layer = layer;
   }
 
-  render(annotation: UnderlineAnnotation, rects: DOMRect[]): void {
-    const group = this.layer.underlines;
-    console.log('[UnderlineRenderer] render() rects:', rects.length, 'color:', annotation.color, 'style:', annotation.style);
-
+  render(annotation: UnderlineAnnotation, rects: DOMRect[], targetGroup: SVGGElement): void {
     for (const rect of rects) {
       const y = rect.y + rect.height - 1;
 
@@ -25,7 +22,7 @@ export class UnderlineRenderer {
         path.style.pointerEvents = 'all';
         path.style.cursor = 'pointer';
         path.dataset.annotationId = annotation.id;
-        group.appendChild(path);
+        targetGroup.appendChild(path);
       } else {
         const line = document.createElementNS(SVG_NS, 'line');
         line.setAttribute('x1', String(rect.x));
@@ -40,7 +37,7 @@ export class UnderlineRenderer {
         line.style.pointerEvents = 'all';
         line.style.cursor = 'pointer';
         line.dataset.annotationId = annotation.id;
-        group.appendChild(line);
+        targetGroup.appendChild(line);
       }
     }
   }
@@ -70,9 +67,6 @@ export class UnderlineRenderer {
   }
 
   remove(annotationId: string): void {
-    const elements = this.layer.underlines.querySelectorAll(
-      `[data-annotation-id="${annotationId}"]`
-    );
-    elements.forEach((el) => el.remove());
+    this.layer.removeById(annotationId);
   }
 }

@@ -8,6 +8,11 @@ import { StyleInjector } from './style-injector';
 import { Paginator } from './pagination';
 import type { AnnotationManager } from '../annotations/annotation-manager';
 
+/** Derive a stable chapter container ID from a spine index. */
+export function getChapterId(spineIndex: number): string {
+  return `epub-spine-${spineIndex}`;
+}
+
 export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   private reader: EpubReader;
   private options: RendererOptions;
@@ -83,6 +88,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     }
 
     this.currentSpineIndex = spineIndex;
+    const chapterId = getChapterId(spineIndex);
     const xhtml = await this.reader.getChapterContent(spineIndex);
     const { replacements } = await this.imageResolver.resolveImages(
       xhtml,
@@ -117,6 +123,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
     this.styleEl.textContent = css;
     this.contentEl.innerHTML = bodyHtml;
+    this.contentEl.id = chapterId;
 
     // Wait for images
     await this.waitForImages();
@@ -135,9 +142,9 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     this.updatePaginationInfo();
     this.emit('renderer:displayed', { spineIndex });
 
-    // Notify annotation layer to re-render
+    // Notify annotation layer: unmount previous, mount current
     if (this._annotations) {
-      this._annotations.onChapterDisplayed(spineIndex);
+      this._annotations.onChapterMounted(spineIndex, this.contentEl);
     }
   }
 
@@ -208,6 +215,10 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
   get spineIndex(): number {
     return this.currentSpineIndex;
+  }
+
+  get chapterId(): string {
+    return getChapterId(this.currentSpineIndex);
   }
 
   /** The shadow root containing rendered content. */
@@ -432,8 +443,6 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       const range = selection.getRangeAt(0);
       // Ensure the selection is inside our content
       if (!this.contentEl.contains(range.commonAncestorContainer)) return;
-
-      console.log('[ContentRenderer] selectionchange fired, text:', text.substring(0, 50));
 
       this.emit('renderer:selection', {
         text,

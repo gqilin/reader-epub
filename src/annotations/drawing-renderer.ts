@@ -22,8 +22,16 @@ export class DrawingRenderer {
   private points: Array<{ x: number; y: number }> = [];
   private onFinish: ((paths: DrawingPath[], width: number, height: number) => void) | null = null;
 
+  /** The SVG group where new drawing strokes are appended. Set by the manager. */
+  private _targetGroup: SVGGElement | null = null;
+
   constructor(layer: AnnotationLayer) {
     this.layer = layer;
+  }
+
+  /** Set the current target group for new drawing strokes. */
+  setTargetGroup(group: SVGGElement | null): void {
+    this._targetGroup = group;
   }
 
   setOptions(options: Partial<DrawingOptions>): void {
@@ -52,6 +60,9 @@ export class DrawingRenderer {
   }
 
   private handlePointerDown = (e: PointerEvent): void => {
+    const targetGroup = this._targetGroup;
+    if (!targetGroup) return;
+
     this.isDrawing = true;
     this.points = [{ x: e.offsetX, y: e.offsetY }];
 
@@ -70,7 +81,7 @@ export class DrawingRenderer {
       `M ${e.offsetX} ${e.offsetY}`
     );
 
-    this.layer.drawings.appendChild(this.currentPath);
+    targetGroup.appendChild(this.currentPath);
     (e.target as Element)?.setPointerCapture?.(e.pointerId);
   };
 
@@ -116,8 +127,7 @@ export class DrawingRenderer {
     this.points = [];
   };
 
-  renderAnnotation(annotation: DrawingAnnotation): void {
-    const group = this.layer.drawings;
+  renderAnnotation(annotation: DrawingAnnotation, targetGroup: SVGGElement): void {
     const svg = this.layer.svgElement;
     const svgRect = svg.getBoundingClientRect();
     const scaleX = svgRect.width / annotation.viewportWidth;
@@ -135,15 +145,12 @@ export class DrawingRenderer {
       pathEl.setAttribute('stroke-linejoin', 'round');
       pathEl.style.pointerEvents = 'all';
       pathEl.dataset.annotationId = annotation.id;
-      group.appendChild(pathEl);
+      targetGroup.appendChild(pathEl);
     }
   }
 
   remove(annotationId: string): void {
-    const elements = this.layer.drawings.querySelectorAll(
-      `[data-annotation-id="${annotationId}"]`
-    );
-    elements.forEach((el) => el.remove());
+    this.layer.removeById(annotationId);
   }
 
   /**

@@ -6,6 +6,8 @@ export interface AnnotationBase {
   createdAt: string;
   updatedAt: string;
   spineIndex: number;
+  /** The chapter container DOM element ID, used to locate the render target. */
+  chapterId: string;
   userData?: Record<string, unknown>;
 }
 

@@ -24,10 +24,9 @@ export class NoteRenderer {
     container.appendChild(this.popover);
   }
 
-  render(annotation: NoteAnnotation, rects: DOMRect[]): void {
+  render(annotation: NoteAnnotation, rects: DOMRect[], targetGroup: SVGGElement): void {
     if (rects.length === 0) return;
 
-    const group = this.layer.notes;
     const firstRect = rects[0];
 
     // Note marker (circle icon at start of range)
@@ -49,7 +48,7 @@ export class NoteRenderer {
     marker.dataset.noteX = String(cx);
     marker.dataset.noteY = String(cy + radius + 8);
 
-    group.appendChild(marker);
+    targetGroup.appendChild(marker);
   }
 
   showPopover(annotationId: string, content: string, x: number, y: number): void {
@@ -74,10 +73,7 @@ export class NoteRenderer {
   }
 
   remove(annotationId: string): void {
-    const elements = this.layer.notes.querySelectorAll(
-      `[data-annotation-id="${annotationId}"]`
-    );
-    elements.forEach((el) => el.remove());
+    this.layer.removeById(annotationId);
     if (this.activeNoteId === annotationId) {
       this.hidePopover();
     }

@@ -2,13 +2,19 @@ import type { ContentRenderer } from '../renderer/content-renderer';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/** SVG sub-groups owned by a single chapter. */
+export interface ChapterSvgGroup {
+  root: SVGGElement;
+  highlights: SVGGElement;
+  underlines: SVGGElement;
+  notes: SVGGElement;
+  drawings: SVGGElement;
+}
+
 export class AnnotationLayer {
   private svg: SVGSVGElement;
-  private highlightGroup: SVGGElement;
-  private underlineGroup: SVGGElement;
-  private noteGroup: SVGGElement;
-  private drawingGroup: SVGGElement;
   private renderer: ContentRenderer;
+  private chapterGroups = new Map<string, ChapterSvgGroup>();
 
   constructor(renderer: ContentRenderer) {
     this.renderer = renderer;
@@ -18,24 +24,53 @@ export class AnnotationLayer {
     this.svg.style.cssText =
       'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
 
-    this.highlightGroup = this.createGroup('highlights');
-    this.underlineGroup = this.createGroup('underlines');
-    this.noteGroup = this.createGroup('notes');
-    this.drawingGroup = this.createGroup('drawings');
-
-    this.svg.append(
-      this.highlightGroup,
-      this.underlineGroup,
-      this.noteGroup,
-      this.drawingGroup
-    );
-
     // Append SVG into the shadow root (must be inside shadow DOM to be visible)
     renderer.contentShadowRoot.appendChild(this.svg);
-    console.log('[AnnotationLayer] SVG layer created and appended to shadowRoot');
-    console.log('[AnnotationLayer] wrapper:', renderer.wrapperElement.tagName, renderer.wrapperElement.className);
-    console.log('[AnnotationLayer] SVG isConnected:', this.svg.isConnected);
   }
+
+  // ── Per-chapter lifecycle ────────────────────────────────────
+
+  /**
+   * Create SVG groups for a chapter. Idempotent — returns existing group
+   * if the chapter is already mounted.
+   */
+  mountChapter(chapterId: string): ChapterSvgGroup {
+    const existing = this.chapterGroups.get(chapterId);
+    if (existing) return existing;
+
+    const root = this.createGroup(`chapter-${chapterId}`);
+    root.dataset.chapterId = chapterId;
+
+    const highlights = this.createGroup('highlights');
+    const underlines = this.createGroup('underlines');
+    const notes = this.createGroup('notes');
+    const drawings = this.createGroup('drawings');
+    root.append(highlights, underlines, notes, drawings);
+
+    this.svg.appendChild(root);
+    const group: ChapterSvgGroup = { root, highlights, underlines, notes, drawings };
+    this.chapterGroups.set(chapterId, group);
+    return group;
+  }
+
+  /**
+   * Remove SVG groups for a chapter (e.g. when it scrolls out of view
+   * in lazy-loading mode). Annotation *data* is not affected.
+   */
+  unmountChapter(chapterId: string): void {
+    const group = this.chapterGroups.get(chapterId);
+    if (group) {
+      group.root.remove();
+      this.chapterGroups.delete(chapterId);
+    }
+  }
+
+  /** Get the SVG groups for a mounted chapter. */
+  getChapterGroup(chapterId: string): ChapterSvgGroup | undefined {
+    return this.chapterGroups.get(chapterId);
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────
 
   private createGroup(className: string): SVGGElement {
     const g = document.createElementNS(SVG_NS, 'g');
@@ -47,26 +82,8 @@ export class AnnotationLayer {
     return this.svg;
   }
 
-  get highlights(): SVGGElement {
-    return this.highlightGroup;
-  }
-
-  get underlines(): SVGGElement {
-    return this.underlineGroup;
-  }
-
-  get notes(): SVGGElement {
-    return this.noteGroup;
-  }
-
-  get drawings(): SVGGElement {
-    return this.drawingGroup;
-  }
-
   /**
    * Transform a DOMRect from viewport coordinates to SVG overlay coordinates.
-   * Since Shadow DOM is in the same document, we just need to offset
-   * relative to the wrapper element.
    */
   transformRect(rect: DOMRect): DOMRect {
     const wrapperRect = this.renderer.wrapperElement.getBoundingClientRect();
@@ -86,30 +103,22 @@ export class AnnotationLayer {
    */
   getRangeRects(range: Range): DOMRect[] {
     const rects = range.getClientRects();
-    console.log('[AnnotationLayer] range.getClientRects() count:', rects.length);
-    for (let i = 0; i < rects.length; i++) {
-      console.log(`[AnnotationLayer]   raw rect[${i}]:`, { x: rects[i].x, y: rects[i].y, w: rects[i].width, h: rects[i].height });
-    }
-
-    const wrapperRect = this.renderer.wrapperElement.getBoundingClientRect();
-    console.log('[AnnotationLayer] wrapperRect:', { x: wrapperRect.x, y: wrapperRect.y, w: wrapperRect.width, h: wrapperRect.height });
-    console.log('[AnnotationLayer] scrollTop:', this.renderer.wrapperElement.scrollTop, 'scrollLeft:', this.renderer.wrapperElement.scrollLeft);
-
     const result: DOMRect[] = [];
     for (let i = 0; i < rects.length; i++) {
       const transformed = this.transformRect(rects[i]);
-      console.log(`[AnnotationLayer]   transformed[${i}]:`, { x: transformed.x, y: transformed.y, w: transformed.width, h: transformed.height });
       if (transformed.width > 0 && transformed.height > 0) {
         result.push(transformed);
       }
     }
-    console.log('[AnnotationLayer] final rects count:', result.length);
     return result;
   }
 
   setDrawingMode(enabled: boolean): void {
-    this.drawingGroup.style.pointerEvents = enabled ? 'all' : 'none';
     this.svg.style.pointerEvents = enabled ? 'all' : 'none';
+    // Also enable pointer events on all chapter drawing groups
+    for (const group of this.chapterGroups.values()) {
+      group.drawings.style.pointerEvents = enabled ? 'all' : 'none';
+    }
   }
 
   /**
@@ -121,22 +130,18 @@ export class AnnotationLayer {
     this.svg.style.height = `${wrapper.scrollHeight}px`;
   }
 
-  clearGroup(group: SVGGElement): void {
-    while (group.firstChild) {
-      group.removeChild(group.firstChild);
-    }
-  }
-
-  clearAll(): void {
-    this.clearGroup(this.highlightGroup);
-    this.clearGroup(this.underlineGroup);
-    this.clearGroup(this.noteGroup);
-    this.clearGroup(this.drawingGroup);
-  }
-
+  /** Remove a single annotation's SVG elements by id (searches all chapters). */
   removeById(id: string): void {
-    const el = this.svg.querySelector(`[data-annotation-id="${id}"]`);
-    el?.remove();
+    const els = this.svg.querySelectorAll(`[data-annotation-id="${id}"]`);
+    els.forEach((el) => el.remove());
+  }
+
+  /** Clear all chapter groups. */
+  clearAll(): void {
+    for (const [, group] of this.chapterGroups) {
+      group.root.remove();
+    }
+    this.chapterGroups.clear();
   }
 
   destroy(): void {

@@ -3,11 +3,12 @@ export { EpubReader } from './core/epub-parser';
 export { ResourceResolver } from './core/resource-resolver';
 
 // Renderer
-export { ContentRenderer } from './renderer/content-renderer';
+export { ContentRenderer, getChapterId } from './renderer/content-renderer';
 
 // Annotations
 export { AnnotationManager } from './annotations/annotation-manager';
 export { AnnotationSerializer } from './annotations/annotation-serializer';
+export type { ChapterSvgGroup } from './annotations/annotation-layer';
 
 // CFI
 export { parseCfi, spineIndexToCfiStep, cfiStepToSpineIndex } from './cfi/cfi-parser';
