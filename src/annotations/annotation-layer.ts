@@ -122,12 +122,14 @@ export class AnnotationLayer {
   }
 
   /**
-   * Sync SVG size to the full scrollable content height (scrolled mode).
+   * Sync SVG size to the actual content area (scrolled mode).
+   * Uses contentElement instead of wrapperElement to avoid the SVG's own
+   * absolutely-positioned box inflating the measured scrollHeight.
    */
   syncSize(): void {
-    const wrapper = this.renderer.wrapperElement;
-    this.svg.style.width = `${wrapper.scrollWidth}px`;
-    this.svg.style.height = `${wrapper.scrollHeight}px`;
+    const content = this.renderer.contentElement;
+    this.svg.style.width = `${content.scrollWidth}px`;
+    this.svg.style.height = `${content.scrollHeight}px`;
   }
 
   /** Remove a single annotation's SVG elements by id (searches all chapters). */
