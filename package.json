@@ -1,0 +1,41 @@
+{
+  "name": "epub-reader",
+  "version": "0.1.0",
+  "description": "Browser-only EPUB parsing and SVG annotation library",
+  "main": "dist/epub-reader.cjs.js",
+  "module": "dist/epub-reader.esm.js",
+  "unpkg": "dist/epub-reader.umd.js",
+  "types": "dist/epub-reader.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/epub-reader.esm.js",
+      "require": "./dist/epub-reader.cjs.js",
+      "types": "./dist/epub-reader.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rollup -c rollup.config.ts --configPlugin typescript",
+    "dev": "rollup -c rollup.config.ts --configPlugin typescript -w",
+    "typecheck": "tsc --noEmit",
+    "example": "vite examples/vanilla --open"
+  },
+  "peerDependencies": {
+    "jszip": "^3.10.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.0",
+    "@rollup/plugin-typescript": "^12.0.0",
+    "jszip": "^3.10.0",
+    "rollup": "^4.0.0",
+    "rollup-plugin-dts": "^6.0.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.5.0",
+    "vite": "^8.0.0"
+  }
+}

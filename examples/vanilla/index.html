@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPUB Reader Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; }
+
+    .app { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 300px;
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .sidebar-header h2 { font-size: 16px; margin-bottom: 8px; }
+    .file-input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+    .file-input-wrapper input[type="file"] { flex: 1; font-size: 13px; }
+
+    .book-info {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 13px;
+      display: none;
+    }
+    .book-info .title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .book-info .author { color: #666; }
+
+    .toc {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+    }
+    .toc-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #333;
+      border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .toc-item:hover { background: #f0f0f0; }
+    .toc-item.active { background: #e8f0fe; border-left-color: #1a73e8; color: #1a73e8; }
+    .toc-item.nested { padding-left: 32px; font-size: 12px; }
+
+    /* Main area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      padding: 8px 16px;
+      background: #fff;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      display: none;
+    }
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .toolbar-group label { font-size: 12px; color: #666; margin-right: 4px; }
+    .toolbar button {
+      padding: 6px 12px;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .toolbar button:hover { background: #f0f0f0; }
+    .toolbar button.active { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+    .toolbar select {
+      padding: 5px 8px;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    /* Reader container */
+    .reader-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #epub-viewer {
+      width: 100%;
+      max-width: 800px;
+      height: 100%;
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 4px;
+    }
+
+    .placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #999;
+      font-size: 16px;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 8px 16px;
+      background: #fff;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #666;
+      display: none;
+    }
+    .nav-buttons { display: flex; gap: 8px; }
+    .nav-buttons button {
+      padding: 4px 16px;
+      border: 1px solid #d0d0d0;
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+    .nav-buttons button:hover { background: #f0f0f0; }
+
+    .color-btn {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .color-btn.active { border-color: #333; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>EPUB Reader</h2>
+        <div class="file-input-wrapper">
+          <input type="file" id="file-input" accept=".epub">
+        </div>
+      </div>
+      <div class="book-info" id="book-info">
+        <div class="title" id="book-title"></div>
+        <div class="author" id="book-author"></div>
+      </div>
+      <div class="toc" id="toc"></div>
+    </div>
+
+    <div class="main">
+      <div class="toolbar" id="toolbar">
+        <div class="toolbar-group">
+          <label>Mode:</label>
+          <button id="btn-select" class="active">Select</button>
+          <button id="btn-draw">Draw</button>
+          <button id="btn-view">View</button>
+        </div>
+        <div class="toolbar-group">
+          <label>Highlight:</label>
+          <button class="color-btn" data-color="yellow" style="background:#FFEB3B"></button>
+          <button class="color-btn" data-color="green" style="background:#4CAF50"></button>
+          <button class="color-btn" data-color="blue" style="background:#2196F3"></button>
+          <button class="color-btn" data-color="pink" style="background:#E91E63"></button>
+        </div>
+        <div class="toolbar-group">
+          <button id="btn-highlight">Highlight</button>
+          <button id="btn-underline">Underline</button>
+          <button id="btn-note">Add Note</button>
+        </div>
+        <div class="toolbar-group">
+          <label>Theme:</label>
+          <select id="theme-select">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="sepia">Sepia</option>
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <label>Font:</label>
+          <select id="font-select">
+            <option value="">Default</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Courier New', monospace">Courier</option>
+            <option value="'Microsoft YaHei', sans-serif">YaHei</option>
+          </select>
+          <button id="btn-font-dec">A-</button>
+          <button id="btn-font-inc">A+</button>
+        </div>
+        <div class="toolbar-group">
+          <label>Line:</label>
+          <select id="line-height-select">
+            <option value="1.5">1.5</option>
+            <option value="1.8" selected>1.8</option>
+            <option value="2">2.0</option>
+            <option value="2.5">2.5</option>
+          </select>
+        </div>
+        <div class="toolbar-group">
+          <label>Reading:</label>
+          <button id="btn-paginated" class="active">Paginated</button>
+          <button id="btn-scrolled">Scrolled</button>
+        </div>
+        <div class="toolbar-group">
+          <button id="btn-export">Export</button>
+          <button id="btn-import">Import</button>
+        </div>
+      </div>
+
+      <div class="reader-container">
+        <div id="epub-viewer">
+          <div class="placeholder">Select an EPUB file to start reading</div>
+        </div>
+      </div>
+
+      <div class="footer" id="footer">
+        <div class="nav-buttons">
+          <button id="btn-prev">Previous</button>
+          <button id="btn-next">Next</button>
+        </div>
+        <div id="progress-info">Page 0 / 0</div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="main.ts"></script>
+</body>
+</html>
