@@ -6,6 +6,7 @@ import type { EpubReader } from '../core/epub-parser';
 import { ImageResolver } from './image-resolver';
 import { StyleInjector } from './style-injector';
 import { Paginator } from './pagination';
+import { resolveHref } from '../core/xml-utils';
 import { parseCfi, cfiStepToSpineIndex } from '../cfi/cfi-parser';
 import { generateCfiRange } from '../cfi/cfi-generator';
 import { resolveCfi } from '../cfi/cfi-resolver';
@@ -107,8 +108,8 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       bodyHtml = bodyHtml.replaceAll(original, blobUrl);
     }
 
-    // Extract inline <style> blocks from the XHTML and prepend them
-    const bookStyles = this.extractStyles(xhtml, replacements);
+    // Extract inline <style> blocks and linked CSS from the XHTML
+    const bookStyles = await this.extractStyles(xhtml, replacements, resolved.href);
 
     // Build CSS
     const rect = this.wrapper.getBoundingClientRect();
@@ -357,6 +358,11 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     } else {
       this.updatePaginationInfo();
     }
+
+    // Refresh annotation positions after layout change
+    requestAnimationFrame(() => {
+      this._annotations?.refreshAnnotations();
+    });
   }
 
   destroy(): void {
@@ -384,13 +390,18 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
         this.paginator.columnGap,
         rect.height
       );
-      // Re-measure pagination
+      // Re-measure pagination, then refresh annotations after reflow
       requestAnimationFrame(() => {
         this.paginator.recalculate();
         this.updatePaginationInfo();
+        this._annotations?.refreshAnnotations();
       });
     } else {
       css += this.styleInjector.buildScrolledStyles();
+      // Refresh annotations after reflow in scrolled mode
+      requestAnimationFrame(() => {
+        this._annotations?.refreshAnnotations();
+      });
     }
 
     this.styleEl.textContent = css;
@@ -421,10 +432,54 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     return html.trim();
   }
 
-  private extractStyles(xhtml: string, replacements: Map<string, string>): string {
+  private async extractStyles(
+    xhtml: string,
+    replacements: Map<string, string>,
+    chapterHref: string
+  ): Promise<string> {
     const styles: string[] = [];
 
-    // Extract <style> blocks
+    // 1. Load external <link rel="stylesheet"> CSS files
+    const linkRegex = /<link[^>]+rel=["']stylesheet["'][^>]*>/gi;
+    let linkMatch;
+    while ((linkMatch = linkRegex.exec(xhtml)) !== null) {
+      const hrefMatch = linkMatch[0].match(/href=["']([^"']+)["']/);
+      if (!hrefMatch) continue;
+
+      const cssHref = hrefMatch[1];
+      const resolvedCssHref = resolveHref(chapterHref, cssHref);
+
+      try {
+        let css = await this.reader.resources.getTextContent(resolvedCssHref);
+
+        // Resolve url() references inside the CSS (relative to CSS file location)
+        const urlPattern = /url\(["']?([^"')]+)["']?\)/g;
+        let urlMatch;
+        const cssReplacements = new Map<string, string>();
+        while ((urlMatch = urlPattern.exec(css)) !== null) {
+          const ref = urlMatch[1];
+          if (!ref || ref.startsWith('data:') || ref.startsWith('http://') || ref.startsWith('https://')) continue;
+          if (cssReplacements.has(ref)) continue;
+          try {
+            const resolvedRef = resolveHref(resolvedCssHref, ref);
+            const blobUrl = await this.reader.resources.createBlobUrl(resolvedRef);
+            cssReplacements.set(ref, blobUrl);
+          } catch {
+            // Skip unresolvable resources
+          }
+        }
+        for (const [original, blobUrl] of cssReplacements) {
+          css = css.replaceAll(original, blobUrl);
+        }
+
+        css = this.scopeCSS(css);
+        styles.push(css);
+      } catch {
+        // Skip CSS files that can't be loaded
+      }
+    }
+
+    // 2. Extract inline <style> blocks
     const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
     let match;
     while ((match = styleRegex.exec(xhtml)) !== null) {
@@ -437,11 +492,6 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       }
       styles.push(css);
     }
-
-    // Extract <link rel="stylesheet"> references — these will have been
-    // resolved to blob URLs already in the body replacement pass,
-    // but we should also inline linked CSS from the EPUB archive.
-    // For now, inline styles are the primary path.
 
     return styles.join('\n');
   }

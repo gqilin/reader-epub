@@ -45,25 +45,34 @@ export class StyleInjector {
       }
     `;
 
-    // Theme properties
+    // Reader theme overrides — must beat book CSS that directly styles p, span, h1, etc.
+    // Use ".epub-body, .epub-body *" with !important for readable properties,
+    // so they apply directly to every element (not just inherited from container).
+    const overrideRules: string[] = [];
     const bodyRules: string[] = [];
 
-    if (t.fontFamily) bodyRules.push(`font-family: ${t.fontFamily}`);
-    if (t.fontSize) bodyRules.push(`font-size: ${t.fontSize}px`);
-    if (t.fontWeight) bodyRules.push(`font-weight: ${t.fontWeight}`);
-    if (t.color) bodyRules.push(`color: ${t.color}`);
-    if (t.backgroundColor) bodyRules.push(`background-color: ${t.backgroundColor}`);
+    if (t.fontFamily) overrideRules.push(`font-family: ${t.fontFamily} !important`);
+    if (t.fontSize) overrideRules.push(`font-size: ${t.fontSize}px !important`);
+    if (t.fontWeight) overrideRules.push(`font-weight: ${t.fontWeight} !important`);
+    if (t.color) overrideRules.push(`color: ${t.color} !important`);
     if (t.lineHeight) {
       const lh = typeof t.lineHeight === 'number' ? `${t.lineHeight}` : t.lineHeight;
-      bodyRules.push(`line-height: ${lh}`);
+      overrideRules.push(`line-height: ${lh} !important`);
     }
     if (t.letterSpacing) {
       const ls = typeof t.letterSpacing === 'number'
         ? `${t.letterSpacing}px`
         : t.letterSpacing;
-      bodyRules.push(`letter-spacing: ${ls}`);
+      overrideRules.push(`letter-spacing: ${ls} !important`);
     }
-    if (t.textAlign) bodyRules.push(`text-align: ${t.textAlign}`);
+    if (t.textAlign) overrideRules.push(`text-align: ${t.textAlign} !important`);
+
+    if (overrideRules.length > 0) {
+      css += `.epub-body, .epub-body * { ${overrideRules.join('; ')}; }`;
+    }
+
+    // Body-only rules (background, padding — should not cascade to children)
+    if (t.backgroundColor) bodyRules.push(`background-color: ${t.backgroundColor}`);
 
     // Padding
     if (t.padding) {
@@ -84,12 +93,12 @@ export class StyleInjector {
 
     // Paragraph spacing
     if (t.paragraphSpacing !== undefined) {
-      css += `.epub-body p { margin-bottom: ${t.paragraphSpacing}px; }`;
+      css += `.epub-body p { margin-bottom: ${t.paragraphSpacing}px !important; }`;
     }
 
     // Link color
     if (t.linkColor) {
-      css += `.epub-body a { color: ${t.linkColor}; }`;
+      css += `.epub-body a { color: ${t.linkColor} !important; }`;
     }
 
     // Image opacity (useful for dark themes)

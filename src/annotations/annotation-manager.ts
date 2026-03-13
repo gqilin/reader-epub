@@ -259,6 +259,27 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     );
   }
 
+  // ── Refresh ────────────────────────────────────────────────
+
+  /**
+   * Re-render all annotations for currently mounted chapters.
+   * Call after layout changes (font size, line height, resize, etc.)
+   * so SVG positions match the reflowed text.
+   */
+  refreshAnnotations(): void {
+    for (const [chapterId, rootElement] of this.chapterRoots) {
+      const spineIndex = this.chapterIdToSpineIndex(chapterId);
+      const group = this.layer.getChapterGroup(chapterId);
+      if (!group) continue;
+      this.clearChapterSvg(group);
+      this.renderChapterAnnotations(spineIndex, chapterId, rootElement, group);
+    }
+
+    if (this.renderer.mode === 'scrolled') {
+      this.layer.syncSize();
+    }
+  }
+
   // ── Remove ──────────────────────────────────────────────────
 
   removeAnnotation(id: string): boolean {
