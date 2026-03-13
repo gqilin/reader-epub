@@ -2,27 +2,29 @@ import { spineIndexToCfiStep } from './cfi-parser';
 
 /**
  * Generate a CFI string from a DOM Range within an EPUB chapter.
+ * @param root The root element to generate paths relative to (e.g. contentElement).
  */
 export function generateCfi(
   range: Range,
   spineIndex: number,
-  doc: Document
+  root: Node
 ): string {
-  const startPath = nodeToPath(range.startContainer, range.startOffset, doc);
+  const startPath = nodeToPath(range.startContainer, range.startOffset, root);
   return `epubcfi(/6/${spineIndexToCfiStep(spineIndex)}!${startPath})`;
 }
 
 /**
  * Generate a CFI range (start and end) from a DOM Range.
+ * @param root The root element to generate paths relative to (e.g. contentElement).
  */
 export function generateCfiRange(
   range: Range,
   spineIndex: number,
-  doc: Document
+  root: Node
 ): { start: string; end: string } {
   const spineStep = spineIndexToCfiStep(spineIndex);
-  const startPath = nodeToPath(range.startContainer, range.startOffset, doc);
-  const endPath = nodeToPath(range.endContainer, range.endOffset, doc);
+  const startPath = nodeToPath(range.startContainer, range.startOffset, root);
+  const endPath = nodeToPath(range.endContainer, range.endOffset, root);
 
   return {
     start: `epubcfi(/6/${spineStep}!${startPath})`,
@@ -30,7 +32,7 @@ export function generateCfiRange(
   };
 }
 
-function nodeToPath(node: Node, offset: number, doc: Document): string {
+function nodeToPath(node: Node, offset: number, root: Node): string {
   const steps: string[] = [];
   let current: Node | null = node;
   let charOffset: number | undefined;
@@ -44,8 +46,8 @@ function nodeToPath(node: Node, offset: number, doc: Document): string {
     current = current.parentNode;
   }
 
-  // Walk up the DOM tree
-  while (current && current !== doc && current !== doc.documentElement) {
+  // Walk up the DOM tree, stopping at the root element
+  while (current && current !== root) {
     const index = getElementIndex(current);
     const id = (current as Element).id;
     if (id) {

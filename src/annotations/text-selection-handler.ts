@@ -61,11 +61,11 @@ export class TextSelectionHandler {
       return null;
     }
 
-    // Generate CFI using contentElement as the document root
+    // Generate CFI relative to contentElement (the root of chapter HTML)
     const cfiRange = generateCfiRange(
       range,
       this.renderer.spineIndex,
-      this.renderer.contentElement.ownerDocument
+      this.renderer.contentElement
     );
     console.log('[TextSelectionHandler] ✓ CFI range:', cfiRange);
 

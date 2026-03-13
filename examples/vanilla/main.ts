@@ -9,6 +9,62 @@ let annotations: AnnotationManager | null = null;
 let selectedColor: HighlightColor = 'yellow';
 let currentMode: 'paginated' | 'scrolled' = 'paginated';
 
+// ── localStorage helpers ─────────────────────────────────────
+const STORAGE_PREFIX = 'epub-annotations-';
+
+function getStorageKey(): string | null {
+  if (!reader) return null;
+  const id = reader.metadata.identifier || reader.metadata.title || '';
+  if (!id) return null;
+  return STORAGE_PREFIX + id;
+}
+
+function saveAnnotationsToLocal(): void {
+  const key = getStorageKey();
+  if (!key || !annotations) return;
+  try {
+    const json = annotations.toJSON();
+    localStorage.setItem(key, json);
+    const count = annotations.getAllAnnotations().length;
+    console.log(`[LocalStorage] Saved ${count} annotations to "${key}"`);
+    updateAnnotationCount(count);
+  } catch (e) {
+    console.warn('[LocalStorage] Failed to save:', e);
+  }
+}
+
+function loadAnnotationsFromLocal(): void {
+  const key = getStorageKey();
+  if (!key || !annotations) return;
+  try {
+    const json = localStorage.getItem(key);
+    if (!json) {
+      console.log(`[LocalStorage] No saved annotations for "${key}"`);
+      updateAnnotationCount(0);
+      return;
+    }
+    annotations.fromJSON(json, 'merge');
+    const count = annotations.getAllAnnotations().length;
+    console.log(`[LocalStorage] Loaded ${count} annotations from "${key}"`);
+    updateAnnotationCount(count);
+  } catch (e) {
+    console.warn('[LocalStorage] Failed to load:', e);
+  }
+}
+
+function updateAnnotationCount(count: number): void {
+  const el = document.getElementById('annotation-count');
+  if (el) el.textContent = `Annotations: ${count}`;
+}
+
+function clearLocalAnnotations(): void {
+  const key = getStorageKey();
+  if (key) {
+    localStorage.removeItem(key);
+    console.log(`[LocalStorage] Cleared annotations for "${key}"`);
+  }
+}
+
 // Preset themes
 const THEMES: Record<string, ReaderTheme> = {
   light: {
@@ -93,6 +149,16 @@ async function createRenderer(mode: 'paginated' | 'scrolled') {
 
   annotations = await renderer.initAnnotations();
 
+  // Auto-save annotations on any change
+  annotations.on('annotation:created', () => saveAnnotationsToLocal());
+  annotations.on('annotation:removed', () => saveAnnotationsToLocal());
+  annotations.on('annotation:updated', () => saveAnnotationsToLocal());
+  annotations.on('annotations:cleared', () => {
+    clearLocalAnnotations();
+    updateAnnotationCount(0);
+  });
+  annotations.on('annotations:imported', () => saveAnnotationsToLocal());
+
   renderer.on('renderer:paginated', (info) => {
     if (mode === 'paginated') {
       progressInfo.textContent =
@@ -108,6 +174,9 @@ async function createRenderer(mode: 'paginated' | 'scrolled') {
   if (reader.spine.length > 0) {
     await renderer.display(spineIndex);
   }
+
+  // Load saved annotations from localStorage
+  loadAnnotationsFromLocal();
 
   updateFooterUI(mode);
 }
@@ -236,7 +305,7 @@ document.getElementById('line-height-select')!.addEventListener('change', (e) =>
   renderer?.setLineHeight(lh);
 });
 
-// Export / Import
+// Export / Import / Clear
 document.getElementById('btn-export')!.addEventListener('click', () => {
   if (!annotations) return;
   const json = annotations.toJSON();
@@ -260,4 +329,11 @@ document.getElementById('btn-import')!.addEventListener('click', () => {
     annotations.fromJSON(text, 'merge');
   });
   input.click();
+});
+
+document.getElementById('btn-clear-annotations')!.addEventListener('click', () => {
+  if (!annotations) return;
+  if (confirm('Clear all annotations for this book?')) {
+    annotations.clearAllAnnotations();
+  }
 });

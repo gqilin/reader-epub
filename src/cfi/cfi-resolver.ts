@@ -7,17 +7,18 @@ export interface CfiResolveResult {
 }
 
 /**
- * Resolve a CFI string to a DOM node and offset within a document.
+ * Resolve a CFI string to a DOM node and offset.
+ * @param root The root element to resolve paths from (e.g. contentElement).
  */
 export function resolveCfi(
   cfi: string,
-  doc: Document
+  root: Node
 ): CfiResolveResult {
   const parsed = parseCfi(cfi);
   const spineIndex = cfiStepToSpineIndex(parsed.spineStep.index);
 
-  // Walk the local path steps through the DOM
-  let current: Node = doc.body ?? doc.documentElement;
+  // Start walking from the root element
+  let current: Node = root;
 
   for (let i = 0; i < parsed.localPath.steps.length; i++) {
     const step = parsed.localPath.steps[i];
@@ -43,7 +44,9 @@ export function resolveCfi(
         // If step has an ID, validate it
         if (step.id && (child as Element).id !== step.id) {
           // Try to find by ID as fallback
-          const byId = doc.getElementById(step.id);
+          const doc = root.ownerDocument ?? root as unknown as Document;
+          const byId = doc.getElementById?.(step.id)
+            ?? (root as Element).querySelector?.(`[id="${step.id}"]`);
           if (byId) {
             current = byId;
             continue;
@@ -75,16 +78,18 @@ export function resolveCfi(
 
 /**
  * Create a DOM Range from two CFI strings (start and end).
+ * @param root The root element to resolve paths from (e.g. contentElement).
  */
 export function cfiRangeToRange(
   startCfi: string,
   endCfi: string,
-  doc: Document
+  root: Node
 ): Range | null {
   try {
-    const start = resolveCfi(startCfi, doc);
-    const end = resolveCfi(endCfi, doc);
+    const start = resolveCfi(startCfi, root);
+    const end = resolveCfi(endCfi, root);
 
+    const doc = root.ownerDocument ?? root as unknown as Document;
     const range = doc.createRange();
     range.setStart(start.node, Math.min(start.offset, getNodeLength(start.node)));
     range.setEnd(end.node, Math.min(end.offset, getNodeLength(end.node)));

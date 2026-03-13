@@ -282,18 +282,26 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
       return;
     }
 
-    // Text-based annotations: resolve CFI to Range
-    const doc = this.renderer.contentElement.ownerDocument;
-    if (!doc) return;
+    // Text-based annotations: resolve CFI to Range relative to contentElement
+    const root = this.renderer.contentElement;
+
+    console.log('[AnnotationManager] renderExisting:', annotation.type, annotation.id);
+    console.log('[AnnotationManager]   startCfi:', annotation.anchor.startCfi);
+    console.log('[AnnotationManager]   endCfi:', annotation.anchor.endCfi);
+    console.log('[AnnotationManager]   root:', root.tagName, root.className, 'children:', root.childNodes.length);
 
     const range = cfiRangeToRange(
       annotation.anchor.startCfi,
       annotation.anchor.endCfi,
-      doc
+      root
     );
+
+    console.log('[AnnotationManager]   range resolved:', range ? 'yes' : 'null');
     if (!range) return;
 
     const rects = this.layer.getRangeRects(range);
+    console.log('[AnnotationManager]   rects:', rects.length);
+
     switch (annotation.type) {
       case 'highlight':
         this.highlightRenderer.render(annotation, rects);
