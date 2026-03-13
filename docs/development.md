@@ -8,7 +8,8 @@ epub-reader/
 │   ├── index.ts                    公共 API 导出
 │   ├── core/                       EPUB 解析核心
 │   │   ├── epub-parser.ts          解析总调度（EpubReader 类）
-│   │   ├── epub-archive.ts         JSZip 包装层
+│   │   ├── epub-archive.ts         JSZip 包装层（本地 EPUB）
+│   │   ├── remote-archive.ts       远程解包 EPUB 加载（HTTP 逐文件拉取）
 │   │   ├── container-parser.ts     META-INF/container.xml 解析
 │   │   ├── opf-parser.ts           .opf 元数据/manifest/spine 解析
 │   │   ├── ncx-parser.ts           EPUB 2 NCX 目录解析
@@ -37,14 +38,15 @@ epub-reader/
 │   │   ├── interaction-handler.ts  点击/悬停/模式切换
 │   │   └── annotation-serializer.ts  JSON 序列化/反序列化
 │   ├── events/
-│   │   ├── event-emitter.ts        类型安全的 EventEmitter
+│   │   ├── event-emitter.ts        类型安全的 TypedEventEmitter
 │   │   └── event-types.ts          所有事件载荷类型定义
 │   └── types/                      类型定义
 │       ├── epub.ts                 EPUB 结构类型
 │       ├── toc.ts                  目录类型
 │       ├── annotation.ts           标注类型体系
 │       ├── renderer.ts             渲染器选项 + 主题类型
-│       └── common.ts               通用类型
+│       ├── archive.ts              归档接口（IEpubArchive）
+│       └── common.ts               通用类型（Disposable）
 ├── examples/vanilla/               原生 JS 使用示例
 ├── rollup.config.ts                构建配置
 └── tsconfig.json                   TypeScript 配置
@@ -56,6 +58,7 @@ epub-reader/
 2. **数据与渲染分离**：标注数据（CFI）独立于 DOM 生命周期，支持持久化
 3. **样式隔离**：Shadow DOM 隔离书籍样式，不污染宿主页面
 4. **分层架构**：解析、渲染、标注三层解耦，可独立使用
+5. **多源加载**：统一的 `IEpubArchive` 接口抽象本地和远程两种加载方式
 
 ---
 
@@ -80,15 +83,35 @@ book.epub (ZIP)
 └── mimetype                   → 固定值 "application/epub+zip"
 ```
 
-### 1.2 解析流程
+### 1.2 归档抽象层（IEpubArchive）
+
+为支持本地和远程两种加载方式，定义了统一的归档接口：
+
+```typescript
+interface IEpubArchive {
+  readText(path: string): Promise<string>;
+  readBlob(path: string, mimeType?: string): Promise<Blob>;
+  getEntries(): string[];
+}
+```
+
+两个实现类：
+
+| 实现 | 文件 | 场景 |
+|---|---|---|
+| `EpubArchive` | `epub-archive.ts` | 本地 EPUB（ZIP），使用 JSZip 解压 |
+| `RemoteArchive` | `remote-archive.ts` | 远程解包 EPUB，通过 HTTP fetch 逐文件加载 |
+
+### 1.3 解析流程
 
 ```
-EpubReader.fromFile(file)
+EpubReader.fromFile(file) / fromUrl(url) / fromRemoteUrl(url)
     │
     ▼
-┌─ epub-archive.ts ─────────────────────────────┐
-│  JSZip 解压 ZIP，提供 readText/readBlob 接口   │
-└───────────────────────────────────────────────┘
+┌─ epub-archive.ts 或 remote-archive.ts ──────────┐
+│  本地: JSZip 解压 ZIP，提供 readText/readBlob 接口  │
+│  远程: HTTP fetch 按需加载，缓存已请求的文件       │
+└───────────────────────────────────────────────────┘
     │
     ▼
 ┌─ container-parser.ts ─────────────────────────┐
@@ -116,17 +139,36 @@ EpubReader.fromFile(file)
     │
     ▼
   EpubReader 实例就绪
-  可访问 metadata / toc / spine / manifest
+  可访问 metadata / toc / spine / manifest / guide
 ```
 
-### 1.3 资源解析（resource-resolver.ts）
+### 1.4 远程 EPUB 加载（remote-archive.ts）
+
+`RemoteArchive` 实现了 `IEpubArchive` 接口，用于加载服务端已解压的 EPUB 目录：
+
+```
+fromRemoteUrl('https://example.com/book/META-INF/container.xml')
+    │
+    ▼
+┌─ RemoteArchive ──────────────────────────────────┐
+│  1. 从入口 URL 推导基础路径                        │
+│  2. 按需 fetch 请求各文件（container.xml → .opf 等）│
+│  3. 内部缓存 Map<path, Response>，避免重复请求      │
+│  4. readText(): fetch + response.text()            │
+│  5. readBlob(): fetch + response.blob()            │
+└──────────────────────────────────────────────────┘
+```
+
+`fromUrl()` 也支持自动检测：当 URL 以 `container.xml` 或 `.opf` 结尾时，自动切换为 `RemoteArchive` 模式。
+
+### 1.5 资源解析（resource-resolver.ts）
 
 EPUB 内的资源（图片、CSS、字体）不能直接在浏览器中通过路径引用，需要转换为 Blob URL：
 
 ```
 ZIP 内路径: OEBPS/images/cover.jpg
     │
-    ▼ epub-archive.readBlob()
+    ▼ archive.readBlob()
     │
     Blob 对象
     │
@@ -199,7 +241,56 @@ display(spineIndex)
     └─ annotations.onChapterMounted()          通知标注层渲染
 ```
 
-### 2.4 分页模式（pagination.ts）
+### 2.4 链接点击拦截
+
+`ContentRenderer` 在 Shadow DOM 内监听点击事件，拦截 `<a>` 标签并分类处理：
+
+```
+用户点击 <a href="...">
+    │
+    ▼ event listener on shadow root
+    │
+    ├─ href 以 '#' 开头
+    │   └─ 锚点链接：在当前章节内 scrollIntoView / querySelector
+    │
+    ├─ href 包含 '.xhtml' / '.html'（内部链接）
+    │   ├─ 通过 spine 查找目标章节索引
+    │   └─ display(targetSpineIndex) + 可选 fragment 定位
+    │
+    └─ href 以 'http' 开头（外部链接）
+        ├─ event.preventDefault()
+        ├─ emit('renderer:link-click', { href, isExternal: true, event })
+        └─ window.open(href, '_blank')
+```
+
+### 2.5 选择工具栏定位
+
+当用户在分页/滚动模式下选中文本，渲染器计算选区位置并通过事件通知外部：
+
+```
+selectionchange 事件
+    │
+    ▼
+emitSelectionToolbar()
+    │
+    ├─ 获取 Selection + Range
+    ├─ range.getBoundingClientRect() → 选区矩形
+    ├─ 计算相对于 container 的坐标
+    ├─ generateCfiRange() → 精确 CFI 范围
+    │
+    └─ emit('renderer:selection-toolbar', {
+         visible: true,
+         position: { x, y, selectionRect },
+         text: selectedText,
+         cfiRange: { start, end }
+       })
+
+用户点击空白处 / 调用 dismissSelectionToolbar()
+    │
+    └─ emit('renderer:selection-toolbar', { visible: false, position: null, text: '', cfiRange })
+```
+
+### 2.6 分页模式（pagination.ts）
 
 使用 CSS 多列布局实现分页，不拆分 DOM：
 
@@ -220,7 +311,7 @@ display(spineIndex)
 - 内容完整保留在 DOM 中，标注 CFI 始终可解析
 - 性能好，浏览器自动跳过不可见区域的绘制
 
-### 2.5 滚动模式
+### 2.7 滚动模式
 
 ```css
 .epub-body {
@@ -231,7 +322,7 @@ display(spineIndex)
 
 章节内容自然流式排列，wrapper 容器提供滚动条。监听 `scroll` 事件计算阅读进度。
 
-### 2.6 主题系统（style-injector.ts）
+### 2.8 主题系统（style-injector.ts）
 
 `StyleInjector` 维护一个 `ReaderTheme` 对象，`buildContentStyles()` 将其转换为 CSS 规则：
 
@@ -248,7 +339,7 @@ letterSpacing           →  .epub-body { letter-spacing: ... }
 textAlign: 'justify'   →  .epub-body { text-align: justify }
 linkColor              →  .epub-body a { color: ... }
 imageOpacity           →  .epub-body img { opacity: ... }
-padding                →  .epub-body { padding: ... }
+padding                →  .epub-body { padding: ... }   (默认 24px 16px)
 ```
 
 调用 `updateTheme()` 时，重新生成 CSS 并写入 `<style>` 元素，触发浏览器重排。分页模式下在下一帧用 `requestAnimationFrame` 重新计算分页。
@@ -278,7 +369,15 @@ CFI 索引:        1         2         3         4         5
 元素用偶数（2, 4, 6...），文本节点用奇数（1, 3, 5...）
 ```
 
-### 3.3 生成（cfi-generator.ts）
+### 3.3 spine 索引与 CFI step 转换
+
+```typescript
+// 工具函数，从 index.ts 导出
+spineIndexToCfiStep(index: number): number   // index * 2 + 2
+cfiStepToSpineIndex(step: number): number    // (step - 2) / 2
+```
+
+### 3.4 生成（cfi-generator.ts）
 
 ```
 用户选中文本 → Range { startContainer, startOffset }
@@ -297,9 +396,13 @@ nodeToPath(textNode, offset, rootElement)
   "epubcfi(/6/{spineStep}!/4/2/1:12)"
 ```
 
+导出函数：
+- `generateCfi(range, spineIndex, rootElement)` — 生成单点 CFI
+- `generateCfiRange(range, spineIndex, rootElement)` — 生成起止 CFI 对 `{ start, end }`
+
 **关键设计**：`rootElement` 是 `contentElement`（div.epub-body），不是 `document.body`。因为内容在 Shadow DOM 中，从 Shadow DOM 向上遍历会穿越 ShadowRoot 产生错误路径。
 
-### 3.4 解析（cfi-resolver.ts）
+### 3.5 解析（cfi-resolver.ts）
 
 ```
 "epubcfi(/6/8!/4/2/1:12)"
@@ -322,6 +425,30 @@ nodeToPath(textNode, offset, rootElement)
     ▼ doc.createRange()
     │
   DOM Range 对象 ← 可用于高亮渲染
+```
+
+导出函数：
+- `parseCfi(cfi)` — 解析 CFI 字符串为 `CfiExpression` 结构化对象
+- `resolveCfi(cfi, rootElement)` — 解析 CFI 到 DOM 节点位置
+- `cfiRangeToRange(startCfi, endCfi, rootElement)` — 从 CFI 范围恢复 DOM Range
+
+### 3.6 CFI 类型定义（cfi-types.ts）
+
+```typescript
+interface CfiStep {
+  index: number;       // CFI 步骤索引
+  id?: string;         // 可选的元素 ID 断言
+}
+
+interface CfiLocalPath {
+  steps: CfiStep[];
+  charOffset?: number; // 字符偏移量
+}
+
+interface CfiExpression {
+  spineStep: number;       // spine 步骤（偶数）
+  localPath: CfiLocalPath; // 章节内路径
+}
 ```
 
 ---
@@ -364,9 +491,12 @@ AnnotationManager
 │   ├── layer.mountChapter(chapterId)           ← 创建 SVG 分组
 │   └── renderChapterAnnotations()              ← 从数据恢复标注
 │
-└── onChapterUnmounted(spineIndex)              ← 章节 DOM 销毁
-    ├── 移除 rootElement 注册
-    └── layer.unmountChapter(chapterId)          ← 删除 SVG 分组（数据保留）
+├── onChapterUnmounted(spineIndex)              ← 章节 DOM 销毁
+│   ├── 移除 rootElement 注册
+│   └── layer.unmountChapter(chapterId)          ← 删除 SVG 分组（数据保留）
+│
+└── refreshAnnotations()                         ← 重新渲染当前章节标注
+    └── 清除 SVG → 重新从数据恢复
 ```
 
 **数据层不受影响**：`annotations: Map<id, Annotation>` 始终保留全部标注数据。只有 SVG 渲染元素跟随章节 DOM 的挂载/卸载。
@@ -461,11 +591,66 @@ range.getClientRects()  → 视口坐标 (viewport-relative)
 
 简化后的路径存储为 SVG path 的 `d` 属性字符串，减少数据体积，渲染更流畅。
 
+### 4.9 标注自定义数据
+
+`AnnotationBase` 提供 `userData?: Record<string, unknown>` 字段，允许业务层附加任意数据到标注上（如用户 ID、标签、来源等），序列化/反序列化时会自动保留。
+
 ---
 
-## 五、构建输出
+## 五、事件系统
 
-### 5.1 Rollup 配置
+### 5.1 TypedEventEmitter
+
+所有事件发射器（`EpubReader`、`ContentRenderer`、`AnnotationManager`）均继承自 `TypedEventEmitter`，提供类型安全的事件监听：
+
+```typescript
+emitter.on(event, handler)              // 持续监听
+emitter.once(event, handler)            // 单次监听
+emitter.off(event, handler)             // 取消监听
+emitter.removeAllListeners()            // 移除所有监听器
+```
+
+### 5.2 事件类型定义
+
+#### EpubReaderEvents
+
+| 事件 | 载荷 | 说明 |
+|---|---|---|
+| `book:ready` | `{ metadata: EpubMetadata }` | 书籍解析完成 |
+| `book:error` | `{ error: Error }` | 解析出错 |
+
+#### RendererEvents
+
+| 事件 | 载荷 | 说明 |
+|---|---|---|
+| `renderer:ready` | `undefined` | 渲染器初始化完成 |
+| `renderer:displayed` | `{ spineIndex: number }` | 章节内容渲染完成 |
+| `renderer:paginated` | `PaginationInfo` | 分页信息更新 |
+| `renderer:resized` | `{ width, height }` | 容器大小变化 |
+| `renderer:selection` | `{ text, range, cfiRange }` | 文本选中（基础事件） |
+| `renderer:selection-toolbar` | `{ visible, position, text, cfiRange }` | 选择工具栏定位（含精确 CFI） |
+| `renderer:click` | `{ event: MouseEvent }` | 内容区域点击 |
+| `renderer:link-click` | `{ href, isExternal, event }` | 链接点击 |
+
+#### AnnotationEvents
+
+| 事件 | 载荷 | 说明 |
+|---|---|---|
+| `annotation:created` | `{ annotation }` | 标注创建 |
+| `annotation:updated` | `{ annotation }` | 标注更新 |
+| `annotation:removed` | `{ id }` | 标注删除 |
+| `annotation:selected` | `{ annotation, event }` | 标注被点击 |
+| `annotation:hover` | `{ annotation \| null, event }` | 标注悬停（离开时 annotation 为 null） |
+| `annotation:drawing:start` | `undefined` | 手绘开始 |
+| `annotation:drawing:end` | `{ annotation }` | 手绘结束 |
+| `annotations:imported` | `{ count }` | 标注导入完成 |
+| `annotations:cleared` | `undefined` | 标注全部清除 |
+
+---
+
+## 六、构建输出
+
+### 6.1 Rollup 配置
 
 输出三种格式：
 
@@ -474,14 +659,14 @@ dist/
 ├── epub-reader.esm.js      ESM（import/export）
 ├── epub-reader.cjs.js      CJS（require）
 ├── epub-reader.umd.js      UMD（浏览器全局变量 / AMD）
-└── index.d.ts              TypeScript 类型声明
+└── epub-reader.d.ts        TypeScript 类型声明
 ```
 
 - `jszip` 作为 external，不打包进产物
 - 使用 `@rollup/plugin-terser` 压缩
 - 使用 `rollup-plugin-dts` 生成合并的 `.d.ts` 声明文件
 
-### 5.2 TypeScript 配置
+### 6.2 TypeScript 配置
 
 ```json
 {
@@ -499,9 +684,9 @@ dist/
 
 ---
 
-## 六、扩展指南
+## 七、扩展指南
 
-### 6.1 懒加载扩展
+### 7.1 懒加载扩展
 
 当前单章模式下，`onChapterMounted` 会自动 unmount 其他章节。实现懒加载时只需：
 
@@ -512,17 +697,21 @@ dist/
 
 标注数据层无需任何改动。
 
-### 6.2 仿真翻页扩展
+### 7.2 仿真翻页扩展
 
 推荐方案：CSS 多列分页保持不变（所有内容在 DOM 中），翻页动画用双视口裁切 + CSS 3D Transform 叠加在上面。
 
 动画只是视觉层面的"表演"，不涉及 DOM 拆分，标注系统零改动。
 
-### 6.3 自定义标注类型
+### 7.3 自定义标注类型
 
 扩展 `AnnotationType` 和 `Annotation` 联合类型，创建对应的 `Renderer`，在 `AnnotationManager` 中注册即可。
 
-### 6.4 框架集成
+### 7.4 自定义归档实现
+
+实现 `IEpubArchive` 接口即可对接自定义的文件加载方式（如 Service Worker 缓存、WebDAV 等）。
+
+### 7.5 框架集成
 
 ```typescript
 // Vue 3
