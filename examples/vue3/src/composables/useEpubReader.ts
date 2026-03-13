@@ -35,8 +35,44 @@ const THEMES: Record<string, ReaderTheme> = {
 };
 
 const STORAGE_PREFIX = 'epub-annotations-';
+const SETTINGS_KEY = 'epub-reader-settings';
+
+interface ReaderSettings {
+  mode: 'paginated' | 'scrolled';
+  themeName: string;
+  fontFamily: string;
+  fontSize: number | null;
+  lineHeight: number | null;
+}
+
+const DEFAULT_SETTINGS: ReaderSettings = {
+  mode: 'scrolled',
+  themeName: 'light',
+  fontFamily: '',
+  fontSize: null,
+  lineHeight: null,
+};
+
+function loadSettings(): ReaderSettings {
+  try {
+    const json = localStorage.getItem(SETTINGS_KEY);
+    if (json) {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(json) };
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_SETTINGS };
+}
+
+function persistSettings(settings: Partial<ReaderSettings>): void {
+  try {
+    const current = loadSettings();
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...current, ...settings }));
+  } catch { /* ignore */ }
+}
 
 export function useEpubReader() {
+  const savedSettings = loadSettings();
+
   const reader = shallowRef<EpubReader | null>(null);
   const renderer = shallowRef<ContentRenderer | null>(null);
   const annotations = shallowRef<AnnotationManager | null>(null);
@@ -46,7 +82,7 @@ export function useEpubReader() {
   const tocItems = ref<TocItem[]>([]);
   const isLoaded = ref(false);
 
-  const currentMode = ref<'paginated' | 'scrolled'>('paginated');
+  const currentMode = ref<'paginated' | 'scrolled'>(savedSettings.mode);
   const selectedColor = ref<HighlightColor>('yellow');
   const selectedUnderlineStyle = ref<UnderlineStyle>('solid');
   const underlineColor = ref('#e74c3c');
@@ -57,10 +93,11 @@ export function useEpubReader() {
   const activeTocId = ref('');
 
   // Reading settings (reactive for UI binding)
-  const themeName = ref('light');
-  const fontFamily = ref('');
-  const fontSize = ref(16);
-  const lineHeight = ref(1.8);
+  // null means "use epub's own value"
+  const themeName = ref(savedSettings.themeName);
+  const fontFamily = ref(savedSettings.fontFamily);
+  const fontSize = ref<number | null>(savedSettings.fontSize);
+  const lineHeight = ref<number | null>(savedSettings.lineHeight);
 
   // Selection toolbar state
   const selectionToolbar = ref<{
@@ -199,6 +236,30 @@ export function useEpubReader() {
     isLoaded.value = true;
   }
 
+  async function loadUrl(url: string) {
+    renderer.value?.destroy();
+    reader.value?.destroy();
+
+    reader.value = await EpubReader.fromUrl(url);
+    bookTitle.value = reader.value.metadata.title || 'Untitled';
+    bookAuthor.value =
+      reader.value.metadata.creators.map((c) => c.name).join(', ') || 'Unknown';
+    tocItems.value = reader.value.toc as TocItem[];
+    isLoaded.value = true;
+  }
+
+  async function loadArrayBuffer(buffer: ArrayBuffer) {
+    renderer.value?.destroy();
+    reader.value?.destroy();
+
+    reader.value = await EpubReader.fromArrayBuffer(buffer);
+    bookTitle.value = reader.value.metadata.title || 'Untitled';
+    bookAuthor.value =
+      reader.value.metadata.creators.map((c) => c.name).join(', ') || 'Unknown';
+    tocItems.value = reader.value.toc as TocItem[];
+    isLoaded.value = true;
+  }
+
   async function createRenderer(container: HTMLElement, mode?: 'paginated' | 'scrolled') {
     if (!reader.value) return;
 
@@ -207,16 +268,18 @@ export function useEpubReader() {
     renderer.value?.destroy();
     container.innerHTML = '';
 
+    // Build theme from cached settings; null values are omitted so epub's own CSS applies
+    const themePreset = THEMES[themeName.value] || THEMES.light;
+    const theme: ReaderTheme = { ...themePreset, padding: 24 };
+    if (fontSize.value !== null) theme.fontSize = fontSize.value;
+    if (lineHeight.value !== null) theme.lineHeight = lineHeight.value;
+    if (fontFamily.value) theme.fontFamily = fontFamily.value;
+
     renderer.value = await reader.value.createRenderer({
       container,
       mode: m,
       columnGap: 40,
-      theme: {
-        ...THEMES.light,
-        fontSize: 16,
-        lineHeight: 1.8,
-        padding: 24,
-      },
+      theme,
     });
 
     annotations.value = await renderer.value.initAnnotations();
@@ -261,6 +324,7 @@ export function useEpubReader() {
   async function switchMode(mode: 'paginated' | 'scrolled', container: HTMLElement) {
     if (currentMode.value === mode) return;
     currentMode.value = mode;
+    persistSettings({ mode });
     await createRenderer(container, mode);
   }
 
@@ -343,21 +407,24 @@ export function useEpubReader() {
     const preset = THEMES[name];
     if (preset && renderer.value) {
       themeName.value = name;
+      persistSettings({ themeName: name });
       renderer.value.updateTheme(preset);
     }
   }
 
   function setFontFamily(family: string) {
     fontFamily.value = family;
+    persistSettings({ fontFamily: family });
     renderer.value?.setFontFamily(family || 'inherit');
   }
 
   function setFontSize(delta: number) {
     if (!renderer.value) return;
-    const cur = fontSize.value;
+    const cur = fontSize.value ?? 16;
     const next = cur + delta;
     if (next >= 12 && next <= 32) {
       fontSize.value = next;
+      persistSettings({ fontSize: next });
       renderer.value.setFontSize(next);
     }
   }
@@ -366,12 +433,14 @@ export function useEpubReader() {
     if (!renderer.value) return;
     if (size >= 12 && size <= 32) {
       fontSize.value = size;
+      persistSettings({ fontSize: size });
       renderer.value.setFontSize(size);
     }
   }
 
   function setLineHeight(lh: number) {
     lineHeight.value = lh;
+    persistSettings({ lineHeight: lh });
     renderer.value?.setLineHeight(lh);
   }
 
@@ -379,15 +448,16 @@ export function useEpubReader() {
     if (!renderer.value) return;
     themeName.value = 'light';
     fontFamily.value = '';
-    fontSize.value = 16;
-    lineHeight.value = 1.8;
+    fontSize.value = null;
+    lineHeight.value = null;
+    persistSettings({ themeName: 'light', fontFamily: '', fontSize: null, lineHeight: null });
     renderer.value.updateTheme({
       ...THEMES.light,
-      fontSize: 16,
-      lineHeight: 1.8,
       padding: 24,
     });
     renderer.value.setFontFamily('inherit');
+    renderer.value.setFontSize(0);
+    renderer.value.setLineHeight(0);
   }
 
   // ── Annotation navigation ─────────────────────
@@ -477,6 +547,8 @@ export function useEpubReader() {
 
     // Methods
     loadFile,
+    loadUrl,
+    loadArrayBuffer,
     createRenderer,
     switchMode,
     prev,

@@ -15,7 +15,7 @@ const router = useRouter();
         Built with Vue 3 + Element Plus + TypeScript
       </p>
       <el-button type="primary" style="margin-top: 20px;" @click="router.push('/')">
-        Go to Reader
+        返回首页
       </el-button>
     </el-card>
   </div>

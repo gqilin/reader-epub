@@ -40,7 +40,10 @@ function onTocClick(item: TocItem) {
     <div class="sidebar-header">
       <div class="sidebar-title-row">
         <h2>EPUB Reader</h2>
-        <el-button text size="small" @click="router.push('/about')">About</el-button>
+        <div>
+          <el-button text size="small" @click="router.push('/')">首页</el-button>
+          <el-button text size="small" @click="router.push('/about')">About</el-button>
+        </div>
       </div>
       <input
         ref="fileInputRef"

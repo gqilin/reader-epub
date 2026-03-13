@@ -16,8 +16,8 @@ const props = defineProps<{
   currentMode: 'paginated' | 'scrolled';
   themeName: string;
   fontFamily: string;
-  fontSize: number;
-  lineHeight: number;
+  fontSize: number | null;
+  lineHeight: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -231,9 +231,9 @@ const fontOptions = [
           <el-divider />
 
           <div class="settings-section">
-            <div class="setting-label">Font Size: {{ fontSize }}px</div>
+            <div class="setting-label">Font Size: {{ fontSize !== null ? fontSize + 'px' : 'Default' }}</div>
             <el-slider
-              :model-value="fontSize"
+              :model-value="fontSize ?? 16"
               :min="12"
               :max="32"
               :step="2"
@@ -243,9 +243,9 @@ const fontOptions = [
           </div>
 
           <div class="settings-section">
-            <div class="setting-label">Line Height: {{ lineHeight }}</div>
+            <div class="setting-label">Line Height: {{ lineHeight !== null ? lineHeight : 'Default' }}</div>
             <el-slider
-              :model-value="lineHeight"
+              :model-value="lineHeight ?? 1.8"
               :min="1.2"
               :max="3"
               :step="0.1"
