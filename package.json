@@ -21,7 +21,8 @@
     "build": "rollup -c rollup.config.ts --configPlugin typescript",
     "dev": "rollup -c rollup.config.ts --configPlugin typescript -w",
     "typecheck": "tsc --noEmit",
-    "example": "vite examples/vanilla --open"
+    "example": "vite examples/vanilla --open",
+    "example:vue3": "npm run --prefix examples/vue3 dev"
   },
   "peerDependencies": {
     "jszip": "^3.10.0"
