@@ -39,6 +39,7 @@ const SETTINGS_KEY = 'epub-reader-settings';
 
 interface ReaderSettings {
   mode: 'paginated' | 'scrolled';
+  spread: boolean;
   themeName: string;
   fontFamily: string;
   fontSize: number | null;
@@ -47,6 +48,7 @@ interface ReaderSettings {
 
 const DEFAULT_SETTINGS: ReaderSettings = {
   mode: 'scrolled',
+  spread: false,
   themeName: 'light',
   fontFamily: '',
   fontSize: null,
@@ -83,6 +85,7 @@ export function useEpubReader() {
   const isLoaded = ref(false);
 
   const currentMode = ref<'paginated' | 'scrolled'>(savedSettings.mode);
+  const spreadEnabled = ref(savedSettings.spread);
   const selectedColor = ref<HighlightColor>('yellow');
   const selectedUnderlineStyle = ref<UnderlineStyle>('solid');
   const underlineColor = ref('#e74c3c');
@@ -278,6 +281,8 @@ export function useEpubReader() {
     renderer.value = await reader.value.createRenderer({
       container,
       mode: m,
+      // spread: spreadEnabled.value,
+      spread: true,
       columnGap: 40,
       theme,
     });
@@ -400,6 +405,13 @@ export function useEpubReader() {
     if (confirm('Clear all annotations for this book?')) {
       annotations.value.clearAllAnnotations();
     }
+  }
+
+  // ── Spread toggle ─────────────────────────────
+  async function toggleSpread(enabled: boolean) {
+    spreadEnabled.value = enabled;
+    persistSettings({ spread: enabled });
+    await renderer.value?.setSpread(enabled);
   }
 
   // ── Theme controls ────────────────────────────
@@ -527,6 +539,7 @@ export function useEpubReader() {
     tocItems,
     isLoaded,
     currentMode,
+    spreadEnabled,
     selectedColor,
     selectedUnderlineStyle,
     underlineColor,
@@ -547,6 +560,7 @@ export function useEpubReader() {
     loadArrayBuffer,
     createRenderer,
     switchMode,
+    toggleSpread,
     prev,
     next,
     goToTocItem,

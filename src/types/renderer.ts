@@ -16,6 +16,8 @@ export interface ReaderTheme {
 export interface RendererOptions {
   container: HTMLElement;
   mode: 'paginated' | 'scrolled';
+  /** Show two columns side-by-side per page (only effective when mode is 'paginated'). */
+  spread?: boolean;
   columnGap?: number;
   theme?: ReaderTheme;
   customStyles?: string;

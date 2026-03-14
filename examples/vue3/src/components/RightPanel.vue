@@ -14,6 +14,7 @@ const props = defineProps<{
   annotationList: Annotation[];
   annotationCount: number;
   currentMode: 'paginated' | 'scrolled';
+  spreadEnabled: boolean;
   themeName: string;
   fontFamily: string;
   fontSize: number | null;
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   setFontSize: [size: number];
   setLineHeight: [lh: number];
   switchMode: [mode: 'paginated' | 'scrolled'];
+  toggleSpread: [enabled: boolean];
   resetTheme: [];
 }>();
 
@@ -69,6 +71,10 @@ function getAnnotationColor(a: Annotation): string {
 
 function truncate(text: string, max = 60): string {
   return text.length > max ? text.slice(0, max) + '...' : text;
+}
+
+function onSpreadChange(val: boolean | string | number) {
+  emit('toggleSpread', !!val);
 }
 
 const fontOptions = [
@@ -192,6 +198,16 @@ const fontOptions = [
               <el-radio-button value="paginated">Paginated</el-radio-button>
               <el-radio-button value="scrolled">Scrolled</el-radio-button>
             </el-radio-group>
+          </div>
+
+          <div v-if="currentMode === 'paginated'" class="settings-section">
+            <div class="setting-label">Dual Column (Spread)</div>
+            <el-switch
+              :model-value="spreadEnabled"
+              active-text="On"
+              inactive-text="Off"
+              @update:model-value="onSpreadChange"
+            />
           </div>
 
           <el-divider />

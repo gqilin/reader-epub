@@ -120,10 +120,12 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     css += this.styleInjector.buildContentStyles() + '\n';
 
     if (this.options.mode === 'paginated') {
+      const columnWidth = this.getColumnWidth(contentWidth);
       css += this.styleInjector.buildPaginationStyles(
-        contentWidth,
+        columnWidth,
         this.paginator.columnGap,
-        contentHeight
+        contentHeight,
+        !!this.options.spread
       );
     } else {
       css += this.styleInjector.buildScrolledStyles();
@@ -267,6 +269,31 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     return this.options.mode;
   }
 
+  get spread(): boolean {
+    return !!(this.options.spread && this.options.mode === 'paginated');
+  }
+
+  /** Toggle dual-column spread mode (paginated only). */
+  async setSpread(enabled: boolean): Promise<void> {
+    if (this.options.mode !== 'paginated') return;
+    if (this.options.spread === enabled) return;
+    const progress = this._pagination.chapterProgress;
+    this.options.spread = enabled;
+    if (this.currentSpineIndex >= 0) {
+      await this.display(this.currentSpineIndex);
+      // Restore approximate reading position
+      const total = this.paginator.current.totalPages;
+      const targetPage = Math.min(
+        Math.round(progress * (total - 1)),
+        total - 1
+      );
+      if (targetPage > 0) {
+        this.paginator.goToPage(targetPage);
+        this.updatePaginationInfo();
+      }
+    }
+  }
+
   // ── Theme API ─────────────────────────────────────────────
 
   /** Replace the entire theme. */
@@ -359,6 +386,20 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       const pad = this.styleInjector.getContentPadding();
       const contentWidth = rect.width - pad.left - pad.right;
       const contentHeight = rect.height - pad.top - pad.bottom;
+
+      // Rebuild pagination CSS so column-width matches new dimensions
+      const columnWidth = this.getColumnWidth(contentWidth);
+      const bookCss = this.extractBookCssFromStyleEl();
+      let css = bookCss + '\n';
+      css += this.styleInjector.buildContentStyles() + '\n';
+      css += this.styleInjector.buildPaginationStyles(
+        columnWidth,
+        this.paginator.columnGap,
+        contentHeight,
+        !!this.options.spread
+      );
+      this.styleEl.textContent = css;
+
       this.paginator.apply(this.contentEl, contentWidth, contentHeight);
       this.updatePaginationInfo();
     } else {
@@ -380,6 +421,14 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   // ── Private ───────────────────────────────────────────────
+
+  /** Compute CSS column-width: half of content area in spread mode. */
+  private getColumnWidth(contentWidth: number): number {
+    if (this.options.spread && this.options.mode === 'paginated') {
+      return (contentWidth - this.paginator.columnGap) / 2;
+    }
+    return contentWidth;
+  }
 
   /**
    * Intercept <a> tag clicks inside epub content.
@@ -505,10 +554,12 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     css += this.styleInjector.buildContentStyles() + '\n';
 
     if (this.options.mode === 'paginated') {
+      const columnWidth = this.getColumnWidth(contentWidth);
       css += this.styleInjector.buildPaginationStyles(
-        contentWidth,
+        columnWidth,
         this.paginator.columnGap,
-        contentHeight
+        contentHeight,
+        !!this.options.spread
       );
       // Re-measure pagination, then refresh annotations after reflow
       requestAnimationFrame(() => {

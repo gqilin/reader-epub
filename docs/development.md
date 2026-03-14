@@ -296,7 +296,7 @@ emitSelectionToolbar()
 
 ```css
 .epub-body {
-  column-width: {pageWidth}px;
+  column-width: {columnWidth}px;
   column-gap: {gap}px;
   column-fill: auto;
   height: {pageHeight}px;
@@ -306,10 +306,20 @@ emitSelectionToolbar()
 
 翻页通过 `transform: translateX(-pageWidth * currentPage)` 实现视口偏移。
 
+**单栏模式**：`columnWidth = contentWidth`，每页显示一列。
+
+**双栏模式（Spread）**：`columnWidth = (contentWidth - gap) / 2`，CSS 多列引擎在可视区域内渲染两列。Paginator 的 `pageWidth = contentWidth + gap` 公式不变 — 每次翻页仍移动一个完整视口宽度，自动跳过两列。总页数约为单栏模式的一半。
+
+```
+单栏：| ---- 一列内容 ---- |   →   translateX 移动 contentWidth+gap
+双栏：| -- 左列 -- | gap | -- 右列 -- |   →   translateX 移动 contentWidth+gap（跳2列）
+```
+
 **优势**：
 - 浏览器原生排版，自动处理段落跨页
 - 内容完整保留在 DOM 中，标注 CFI 始终可解析
 - 性能好，浏览器自动跳过不可见区域的绘制
+- 双栏模式无需额外 DOM 或 JS 逻辑，仅改变 CSS column-width 值
 
 ### 2.7 滚动模式
 

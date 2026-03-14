@@ -7,7 +7,7 @@
 **核心能力：**
 
 - 解析 EPUB 文件，获取元数据、目录、章节内容
-- Shadow DOM 渲染，支持分页和滚动两种阅读模式
+- Shadow DOM 渲染，支持分页和滚动两种阅读模式，分页模式支持双栏（Spread）显示
 - SVG 标注系统：高亮、下划线、笔记、手绘
 - 主题 API：字体、字号、颜色、行高、段间距等
 - 标注持久化：JSON 导入/导出
@@ -269,6 +269,7 @@ reader.removeAllListeners()
 const renderer = await reader.createRenderer({
   container: document.getElementById('viewer'), // 容器元素
   mode: 'paginated',    // 阅读模式
+  spread: false,        // 双栏模式（仅 paginated 生效），默认 false
   columnGap: 40,        // 分页模式下的列间距（px），默认 40
   theme: { ... },       // 初始主题
   customStyles: '',     // 自定义 CSS
@@ -315,6 +316,7 @@ renderer.on('renderer:paginated', (info) => {
 renderer.spineIndex        // 当前章节索引
 renderer.chapterId         // 当前章节容器 ID
 renderer.mode              // 当前阅读模式 'paginated' | 'scrolled'
+renderer.spread            // 当前是否为双栏模式
 renderer.contentShadowRoot // Shadow DOM 根节点
 renderer.contentElement    // 章节内容 DOM 元素
 renderer.wrapperElement    // 外层包装 DOM 元素
@@ -347,6 +349,28 @@ const newRenderer = await reader.createRenderer({
 });
 await newRenderer.display(0);
 ```
+
+### 双栏模式（Spread）
+
+分页模式下可开启双栏显示，适合 PC 或大屏横屏平板。每页显示两列文本，类似翻开的纸质书：
+
+```typescript
+// 创建时启用
+const renderer = await reader.createRenderer({
+  container: viewer,
+  mode: 'paginated',
+  spread: true,
+});
+
+// 运行时切换（保持阅读进度）
+await renderer.setSpread(true);   // 开启双栏
+await renderer.setSpread(false);  // 关闭双栏
+
+// 读取状态
+console.log(renderer.spread);     // true | false
+```
+
+> 注意：`spread` 仅在 `mode: 'paginated'` 时生效，滚动模式下无效。建议容器宽度 ≥ 1000px 以获得良好的双栏阅读体验。
 
 ## 链接点击处理
 

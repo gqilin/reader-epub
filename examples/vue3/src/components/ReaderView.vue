@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 
 defineProps<{
   isLoaded: boolean;
+  spread: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -20,7 +21,7 @@ onMounted(() => {
 
 <template>
   <div class="reader-container">
-    <div ref="viewerEl" id="epub-viewer">
+    <div ref="viewerEl" id="epub-viewer" :class="{ 'spread-mode': spread }">
       <el-empty v-if="!isLoaded" description="Select an EPUB file to start reading" />
     </div>
   </div>
@@ -46,5 +47,10 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: max-width 0.3s ease;
+
+  &.spread-mode {
+    max-width: 1400px;
+  }
 }
 </style>

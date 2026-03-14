@@ -135,6 +135,7 @@ onMounted(() => {
         />
         <ReaderView
           :is-loaded="epub.isLoaded.value"
+          :spread="epub.spreadEnabled.value"
           @viewer-mounted="setViewerRef"
         />
         <FooterBar
@@ -151,6 +152,7 @@ onMounted(() => {
       :annotation-list="epub.annotationList.value"
       :annotation-count="epub.annotationCount.value"
       :current-mode="epub.currentMode.value"
+      :spread-enabled="epub.spreadEnabled.value"
       :theme-name="epub.themeName.value"
       :font-family="epub.fontFamily.value"
       :font-size="epub.fontSize.value"
@@ -165,6 +167,7 @@ onMounted(() => {
       @set-font-size="epub.setFontSizeAbsolute"
       @set-line-height="epub.setLineHeight"
       @switch-mode="onSwitchMode"
+      @toggle-spread="epub.toggleSpread"
       @reset-theme="epub.resetTheme"
     />
     <SelectionToolbar

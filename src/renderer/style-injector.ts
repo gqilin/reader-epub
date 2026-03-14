@@ -118,7 +118,11 @@ export class StyleInjector {
     return css;
   }
 
-  buildPaginationStyles(columnWidth: number, gap: number, height: number): string {
+  buildPaginationStyles(columnWidth: number, gap: number, height: number, spread = false): string {
+    const ruleColor = this.theme.color ?? '#e0e0e0';
+    const columnRule = spread
+      ? `column-rule: 1px solid color-mix(in srgb, ${ruleColor} 15%, transparent);`
+      : '';
     return `
       .epub-body {
         height: ${height}px;
@@ -127,6 +131,7 @@ export class StyleInjector {
         column-fill: auto;
         overflow: visible;
         box-sizing: border-box;
+        ${columnRule}
       }
       /* Prevent wrappers with explicit height from creating blank columns */
       .epub-body > * {
