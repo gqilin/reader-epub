@@ -17,7 +17,7 @@
 ## 安装
 
 ```bash
-npm install epub-reader
+npm install xml-ebook
 ```
 
 JSZip 作为 peerDependency，需要同时安装：
@@ -29,7 +29,7 @@ npm install jszip
 ## 快速开始
 
 ```typescript
-import { EpubReader } from 'epub-reader';
+import { EpubReader } from 'xml-ebook';
 
 // 1. 加载 EPUB 文件
 const reader = await EpubReader.fromFile(file);       // File API
@@ -105,7 +105,7 @@ const reader = await EpubReader.fromArrayBuffer(buffer);
 - 对接非标准存储（WebDAV、IndexedDB、Service Worker 等）
 
 ```typescript
-import { EpubReader, type IEpubArchive } from 'epub-reader';
+import { EpubReader, type IEpubArchive } from 'xml-ebook';
 
 // 实现自定义 Archive
 class EncryptedRemoteArchive implements IEpubArchive {
@@ -729,7 +729,7 @@ import {
   generateCfiRange,
   resolveCfi,
   cfiRangeToRange,
-} from 'epub-reader';
+} from 'xml-ebook';
 
 // 解析 CFI 字符串为结构化对象
 const cfi = parseCfi('epubcfi(/6/8!/4/2/1:12)');
@@ -766,7 +766,7 @@ const blob2 = await reader.getResourceByHref('images/cover.jpg');
 ## 工具函数
 
 ```typescript
-import { getChapterId } from 'epub-reader';
+import { getChapterId } from 'xml-ebook';
 
 // 根据 spine 索引生成章节容器 ID
 const id = getChapterId(0); // 'epub-spine-0'
@@ -777,7 +777,7 @@ const id = getChapterId(0); // 'epub-spine-0'
 `AnnotationSerializer` 提供独立的标注数据序列化/反序列化能力：
 
 ```typescript
-import { AnnotationSerializer } from 'epub-reader';
+import { AnnotationSerializer } from 'xml-ebook';
 
 // 序列化标注数据为 AnnotationStore 对象
 const store = AnnotationSerializer.serialize(bookId, annotationsMap);
@@ -792,7 +792,7 @@ const store2 = AnnotationSerializer.fromJSON(json);
 
 ## 导出类型汇总
 
-以下类型均从 `epub-reader` 包导出，可用于 TypeScript 类型标注：
+以下类型均从 `xml-ebook` 包导出，可用于 TypeScript 类型标注：
 
 ```typescript
 import type {
@@ -836,7 +836,7 @@ import type {
   IEpubArchive,
   ChapterSvgGroup,
   Disposable,
-} from 'epub-reader';
+} from 'xml-ebook';
 ```
 
 ## 销毁
@@ -849,7 +849,7 @@ reader.destroy();    // 销毁阅读器（释放 blob URL 等资源）
 ## 完整示例
 
 ```typescript
-import { EpubReader } from 'epub-reader';
+import { EpubReader } from 'xml-ebook';
 
 const viewer = document.getElementById('viewer');
 

@@ -9,7 +9,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      'epub-reader': resolve(__dirname, '../../src/index.ts'),
+      'xml-ebook': resolve(__dirname, '../../src/index.ts'),
     },
   },
 });

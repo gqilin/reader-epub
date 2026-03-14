@@ -1,8 +1,8 @@
 import { ref, shallowRef } from 'vue';
-import { EpubReader } from 'epub-reader';
+import { EpubReader } from 'xml-ebook';
 import type {
   ContentRenderer,
-} from 'epub-reader';
+} from 'xml-ebook';
 import type {
   TocItem,
   HighlightColor,
@@ -12,7 +12,7 @@ import type {
   AnnotationManager,
   Annotation,
   SelectionToolbarPosition,
-} from 'epub-reader';
+} from 'xml-ebook';
 
 // Preset themes
 const THEMES: Record<string, ReaderTheme> = {

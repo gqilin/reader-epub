@@ -12,20 +12,20 @@ export default defineConfig([
     input: 'src/index.ts',
     output: [
       {
-        file: 'dist/epub-reader.esm.js',
+        file: 'dist/xml-ebook.esm.js',
         format: 'esm',
         sourcemap: true,
       },
       {
-        file: 'dist/epub-reader.cjs.js',
+        file: 'dist/xml-ebook.cjs.js',
         format: 'cjs',
         sourcemap: true,
         exports: 'named',
       },
       {
-        file: 'dist/epub-reader.umd.js',
+        file: 'dist/xml-ebook.umd.js',
         format: 'umd',
-        name: 'EpubReader',
+        name: 'XmlEbook',
         sourcemap: true,
         globals: { jszip: 'JSZip' },
       },
@@ -44,7 +44,7 @@ export default defineConfig([
   {
     input: 'src/index.ts',
     output: {
-      file: 'dist/epub-reader.d.ts',
+      file: 'dist/xml-ebook.d.ts',
       format: 'esm',
     },
     external,

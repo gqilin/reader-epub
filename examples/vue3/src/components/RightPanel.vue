@@ -8,7 +8,7 @@ import {
   Location,
   RefreshLeft,
 } from '@element-plus/icons-vue';
-import type { Annotation } from 'epub-reader';
+import type { Annotation } from 'xml-ebook';
 
 const props = defineProps<{
   annotationList: Annotation[];

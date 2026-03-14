@@ -3,7 +3,7 @@
 ## 架构概览
 
 ```
-epub-reader/
+xml-ebook/
 ├── src/
 │   ├── index.ts                    公共 API 导出
 │   ├── core/                       EPUB 解析核心
@@ -202,7 +202,7 @@ ZIP 内路径: OEBPS/images/cover.jpg
 
 ```
 [用户传入的 container]
-└── div.epub-reader-wrapper (position:relative, overflow:hidden/auto)
+└── div.xml-ebook-wrapper (position:relative, overflow:hidden/auto)
     └── #shadow-root (open)
         ├── <style>           ← 动态生成的 CSS（书籍样式 + 主题 + 分页/滚动布局）
         ├── div.epub-body     ← 章节 HTML 内容（id="epub-spine-{N}"）
@@ -666,10 +666,10 @@ emitter.removeAllListeners()            // 移除所有监听器
 
 ```
 dist/
-├── epub-reader.esm.js      ESM（import/export）
-├── epub-reader.cjs.js      CJS（require）
-├── epub-reader.umd.js      UMD（浏览器全局变量 / AMD）
-└── epub-reader.d.ts        TypeScript 类型声明
+├── xml-ebook.esm.js      ESM（import/export）
+├── xml-ebook.cjs.js      CJS（require）
+├── xml-ebook.umd.js      UMD（浏览器全局变量 / AMD）
+└── xml-ebook.d.ts        TypeScript 类型声明
 ```
 
 - `jszip` 作为 external，不打包进产物
@@ -748,7 +748,7 @@ dist/
 ```
 
 ```typescript
-import { EpubReader, type IEpubArchive } from 'epub-reader';
+import { EpubReader, type IEpubArchive } from 'xml-ebook';
 
 class MyArchive implements IEpubArchive {
   async readText(path: string): Promise<string> {

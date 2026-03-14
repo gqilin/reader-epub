@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TocItem } from 'epub-reader';
+import type { TocItem } from 'xml-ebook';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Upload } from '@element-plus/icons-vue';

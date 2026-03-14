@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
-import type { SelectionToolbarPosition, HighlightColor } from 'epub-reader';
+import type { SelectionToolbarPosition, HighlightColor } from 'xml-ebook';
 
 const props = defineProps<{
   visible: boolean;

@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "epub-reader": ["../../src/index.ts"]
+      "xml-ebook": ["../../src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue", "vite-env.d.ts"]

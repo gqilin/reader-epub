@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TocItem } from 'epub-reader';
+import type { TocItem } from 'xml-ebook';
 
 const props = defineProps<{
   item: TocItem;

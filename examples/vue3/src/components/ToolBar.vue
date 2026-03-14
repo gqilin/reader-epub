@@ -5,7 +5,7 @@ import {
   EditPen,
   View,
 } from '@element-plus/icons-vue';
-import type { HighlightColor, UnderlineStyle } from 'epub-reader';
+import type { HighlightColor, UnderlineStyle } from 'xml-ebook';
 
 defineProps<{
   selectedColor: HighlightColor;

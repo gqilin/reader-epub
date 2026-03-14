@@ -1,16 +1,16 @@
 {
-  "name": "epub-reader",
+  "name": "xml-ebook",
   "version": "0.1.0",
   "description": "Browser-only EPUB parsing and SVG annotation library",
-  "main": "dist/epub-reader.cjs.js",
-  "module": "dist/epub-reader.esm.js",
-  "unpkg": "dist/epub-reader.umd.js",
-  "types": "dist/epub-reader.d.ts",
+  "main": "dist/xml-ebook.cjs.js",
+  "module": "dist/xml-ebook.esm.js",
+  "unpkg": "dist/xml-ebook.umd.js",
+  "types": "dist/xml-ebook.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/epub-reader.esm.js",
-      "require": "./dist/epub-reader.cjs.js",
-      "types": "./dist/epub-reader.d.ts"
+      "import": "./dist/xml-ebook.esm.js",
+      "require": "./dist/xml-ebook.cjs.js",
+      "types": "./dist/xml-ebook.d.ts"
     }
   },
   "files": [
