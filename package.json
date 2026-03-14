@@ -22,7 +22,10 @@
     "dev": "rollup -c rollup.config.ts --configPlugin typescript -w",
     "typecheck": "tsc --noEmit",
     "example": "vite examples/vanilla --open",
-    "example:vue3": "npm run --prefix examples/vue3 dev"
+    "example:vue3": "npm run --prefix examples/vue3 dev",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "peerDependencies": {
     "jszip": "^3.10.0"
@@ -37,6 +40,7 @@
     "rollup-plugin-dts": "^6.0.0",
     "tslib": "^2.6.0",
     "typescript": "^5.5.0",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "vitepress": "^1.6.4"
   }
 }
