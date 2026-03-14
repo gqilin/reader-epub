@@ -23,7 +23,10 @@ export class TextSelectionHandler {
     const docSel = document.getSelection();
     const selection = srSel ?? docSel;
 
-    if (!selection || selection.isCollapsed) return null;
+    if (!selection || selection.isCollapsed) {
+      // Fallback to cached selection (e.g., when a dialog has stolen focus)
+      return this.currentSelection;
+    }
 
     const text = selection.toString().trim();
     if (!text) return null;

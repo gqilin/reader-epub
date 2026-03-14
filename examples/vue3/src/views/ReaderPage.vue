@@ -180,6 +180,42 @@ onMounted(() => {
       @copy="epub.selectionCopy"
       @set-color="epub.setSelectedColor"
     />
+
+    <!-- Note dialog -->
+    <el-dialog
+      v-model="epub.noteDialog.value.visible"
+      title="添加笔记"
+      width="420px"
+      :close-on-click-modal="false"
+      @close="epub.cancelNoteDialog"
+    >
+      <el-input
+        v-model="epub.noteDialog.value.content"
+        type="textarea"
+        :rows="4"
+        placeholder="在此输入笔记..."
+        autofocus
+      />
+      <template #footer>
+        <el-button @click="epub.cancelNoteDialog">取消</el-button>
+        <el-button type="primary" @click="epub.confirmNoteDialog">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Confirm dialog -->
+    <el-dialog
+      v-model="epub.confirmDialog.value.visible"
+      :title="epub.confirmDialog.value.title"
+      width="380px"
+      :close-on-click-modal="false"
+      @close="epub.confirmDialogCancel"
+    >
+      <span>{{ epub.confirmDialog.value.message }}</span>
+      <template #footer>
+        <el-button @click="epub.confirmDialogCancel">取消</el-button>
+        <el-button type="danger" @click="epub.confirmDialogOk">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

@@ -115,6 +115,20 @@ export function useEpubReader() {
     cfiRange: { start: '', end: '' },
   });
 
+  // ── Dialog state ─────────────────────────────────
+  const noteDialog = ref({
+    visible: false,
+    content: '',
+    source: '' as 'toolbar' | 'selection',
+  });
+
+  const confirmDialog = ref({
+    visible: false,
+    title: '',
+    message: '',
+  });
+  let _confirmAction: (() => void) | null = null;
+
   // ── TOC helpers ─────────────────────────────────
 
   /** Collect all TocItems matching a spineIndex (flat, depth-first order) */
@@ -365,8 +379,8 @@ export function useEpubReader() {
   }
 
   function addNote() {
-    const content = prompt('Enter note:');
-    if (content) annotations.value?.addNoteToSelection(content);
+    if (!annotations.value?.captureSelection()) return;
+    noteDialog.value = { visible: true, content: '', source: 'toolbar' };
   }
 
   function exportAnnotations() {
@@ -402,9 +416,12 @@ export function useEpubReader() {
 
   function clearAnnotations() {
     if (!annotations.value) return;
-    if (confirm('Clear all annotations for this book?')) {
-      annotations.value.clearAllAnnotations();
-    }
+    _confirmAction = () => annotations.value?.clearAllAnnotations();
+    confirmDialog.value = {
+      visible: true,
+      title: '清除标注',
+      message: '确定要清除本书所有标注吗？此操作不可撤销。',
+    };
   }
 
   // ── Spread toggle ─────────────────────────────
@@ -479,7 +496,12 @@ export function useEpubReader() {
   }
 
   function removeAnnotation(id: string) {
-    annotations.value?.removeAnnotation(id);
+    _confirmAction = () => annotations.value?.removeAnnotation(id);
+    confirmDialog.value = {
+      visible: true,
+      title: '删除标注',
+      message: '确定要删除此标注吗？',
+    };
   }
 
   async function goToCfi(cfi: string) {
@@ -509,13 +531,8 @@ export function useEpubReader() {
   }
 
   function selectionAddNote() {
-    const content = prompt('Enter note:');
-    if (content) {
-      annotations.value?.addNoteToSelection(content);
-    } else {
-      // User cancelled, dismiss toolbar
-      renderer.value?.dismissSelectionToolbar();
-    }
+    if (!annotations.value?.captureSelection()) return;
+    noteDialog.value = { visible: true, content: '', source: 'selection' };
   }
 
   function selectionCopy() {
@@ -527,6 +544,38 @@ export function useEpubReader() {
 
   function dismissSelectionToolbar() {
     renderer.value?.dismissSelectionToolbar();
+  }
+
+  // ── Dialog actions ──────────────────────────────
+  function confirmNoteDialog() {
+    const { content, source } = noteDialog.value;
+    if (content.trim()) {
+      annotations.value?.addNoteToSelection(content.trim());
+    } else if (source === 'selection') {
+      renderer.value?.dismissSelectionToolbar();
+    }
+    noteDialog.value.visible = false;
+    noteDialog.value.content = '';
+  }
+
+  function cancelNoteDialog() {
+    const { source } = noteDialog.value;
+    noteDialog.value.visible = false;
+    noteDialog.value.content = '';
+    if (source === 'selection') {
+      renderer.value?.dismissSelectionToolbar();
+    }
+  }
+
+  function confirmDialogOk() {
+    _confirmAction?.();
+    _confirmAction = null;
+    confirmDialog.value.visible = false;
+  }
+
+  function confirmDialogCancel() {
+    _confirmAction = null;
+    confirmDialog.value.visible = false;
   }
 
   return {
@@ -553,6 +602,8 @@ export function useEpubReader() {
     fontSize,
     lineHeight,
     selectionToolbar,
+    noteDialog,
+    confirmDialog,
 
     // Methods
     loadFile,
@@ -587,5 +638,9 @@ export function useEpubReader() {
     selectionAddNote,
     selectionCopy,
     dismissSelectionToolbar,
+    confirmNoteDialog,
+    cancelNoteDialog,
+    confirmDialogOk,
+    confirmDialogCancel,
   };
 }

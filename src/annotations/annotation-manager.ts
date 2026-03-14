@@ -114,6 +114,15 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
 
   // ── Create annotations from current selection ───────────────
 
+  /**
+   * Capture and cache the current text selection.
+   * Call this before showing any dialog that steals focus (e.g. note input),
+   * so that subsequent addNoteToSelection() can still access the selection.
+   */
+  captureSelection(): boolean {
+    return this.selectionHandler.getSelection() !== null;
+  }
+
   highlightSelection(
     color: HighlightColor = 'yellow',
     opacity = 0.35
