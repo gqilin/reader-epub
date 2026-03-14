@@ -128,6 +128,43 @@ export class StyleInjector {
         overflow: visible;
         box-sizing: border-box;
       }
+      /* Prevent wrappers with explicit height from creating blank columns */
+      .epub-body > * {
+        height: auto !important;
+        min-height: 0 !important;
+        box-sizing: border-box;
+      }
+      /* Remove edge margins inside containers to prevent column overflow */
+      .epub-body > * > *:first-child { margin-top: 0 !important; }
+      .epub-body > * > *:last-child  { margin-bottom: 0 !important; }
+      /* Force images to auto-size within column bounds */
+      .epub-body img {
+        width: auto !important;
+        height: auto !important;
+        max-width: 100% !important;
+        max-height: ${height}px !important;
+      }
+      /* Eliminate inline formatting gaps around standalone images:
+         line-height/font-size: 0 kills the "strut" so the image box
+         has zero extra pixels from the inline context. */
+      .epub-body *:has(> img:only-child) {
+        margin: 0 !important;
+        padding: 0 !important;
+        line-height: 0 !important;
+        font-size: 0 !important;
+      }
+      /* Collapse spacing on the outer wrapper when it only contains
+         a single image-wrapper child (e.g. div > p > img). */
+      .epub-body > *:has(> *:only-child > img:only-child) {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      /* SVG / video: constrain to column bounds */
+      .epub-body svg,
+      .epub-body video {
+        max-width: 100% !important;
+        max-height: ${height}px !important;
+      }
     `;
   }
 
