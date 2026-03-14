@@ -58,7 +58,7 @@ export class StyleInjector {
       .epub-body svg,
       .epub-body video {
         max-width: 100%;
-        height: auto;
+        max-height: 100%;
       }
     `;
 
