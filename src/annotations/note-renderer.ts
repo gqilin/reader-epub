@@ -55,7 +55,7 @@ export class NoteRenderer {
 
       targetGroup.appendChild(clickRect);
 
-      // Dashed underline overlay (for visual feedback)
+      // Dashed underline overlay (for visual feedback and flash animation)
       const underlineY = y + height - 2;
       const path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', `M ${x} ${underlineY} L ${x + width} ${underlineY}`);
@@ -64,6 +64,7 @@ export class NoteRenderer {
       path.setAttribute('stroke-dasharray', '4,3');
       path.setAttribute('fill', 'none');
       path.style.pointerEvents = 'none';
+      path.dataset.annotationId = annotation.id;
 
       targetGroup.appendChild(path);
     });

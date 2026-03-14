@@ -35,6 +35,13 @@ export class AnnotationLayer {
       .epub-annotation-flash {
         animation: epub-annotation-flash 0.8s ease-in-out 3;
       }
+      @keyframes epub-highlight-flash {
+        0%, 100% { opacity: 0; }
+        50% { opacity: var(--highlight-opacity, 0.35); }
+      }
+      .epub-highlight-flash {
+        animation: epub-highlight-flash 0.8s ease-in-out 3;
+      }
     `;
     renderer.contentShadowRoot.appendChild(this.animStyle);
 
@@ -186,17 +193,35 @@ export class AnnotationLayer {
     const els = this.svg.querySelectorAll(`[data-annotation-id="${id}"]`);
     if (els.length === 0) return;
 
-    // Remove existing flash class (in case of rapid re-trigger)
-    els.forEach((el) => el.classList.remove('epub-annotation-flash'));
+    // Remove existing flash classes (in case of rapid re-trigger)
+    els.forEach((el) => {
+      el.classList.remove('epub-annotation-flash');
+      el.classList.remove('epub-highlight-flash');
+    });
 
     // Force reflow then add animation class
     requestAnimationFrame(() => {
-      els.forEach((el) => el.classList.add('epub-annotation-flash'));
+      els.forEach((el) => {
+        // Highlight rects get special animation (0 → opacity → 0)
+        if ((el as SVGElement).tagName === 'rect') {
+          const opacity = (el as SVGElement).getAttribute('opacity');
+          if (opacity) {
+            (el as SVGElement).style.setProperty('--highlight-opacity', opacity);
+          }
+          el.classList.add('epub-highlight-flash');
+        } else {
+          // Lines and paths use standard animation (1 → 0.3 → 1)
+          el.classList.add('epub-annotation-flash');
+        }
+      });
     });
 
     // Clean up class after animation completes
     const onEnd = () => {
-      els.forEach((el) => el.classList.remove('epub-annotation-flash'));
+      els.forEach((el) => {
+        el.classList.remove('epub-annotation-flash');
+        el.classList.remove('epub-highlight-flash');
+      });
     };
     els[0].addEventListener('animationend', onEnd, { once: true });
   }
