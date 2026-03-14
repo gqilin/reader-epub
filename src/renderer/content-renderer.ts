@@ -142,6 +142,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       this.paginator.apply(this.contentEl, contentWidth, contentHeight);
       this.paginator.goToPage(0);
     } else {
+      this.contentEl.style.transform = '';
       this.wrapper.scrollTop = 0;
       this.setupScrollListener();
     }
@@ -290,6 +291,36 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       if (targetPage > 0) {
         this.paginator.goToPage(targetPage);
         this.updatePaginationInfo();
+      }
+    }
+  }
+
+  /** Switch between 'paginated' and 'scrolled' mode, preserving reading position. */
+  async setMode(mode: 'paginated' | 'scrolled'): Promise<void> {
+    if (this.options.mode === mode) return;
+    const progress = this._pagination.chapterProgress;
+    this.options.mode = mode;
+    this.applyWrapperStyle();
+    if (this.currentSpineIndex >= 0) {
+      await this.display(this.currentSpineIndex);
+      // Restore approximate reading position
+      if (mode === 'paginated') {
+        const total = this.paginator.current.totalPages;
+        const targetPage = Math.min(
+          Math.round(progress * (total - 1)),
+          total - 1
+        );
+        if (targetPage > 0) {
+          this.paginator.goToPage(targetPage);
+          this.updatePaginationInfo();
+        }
+      } else {
+        const scrollHeight =
+          this.wrapper.scrollHeight - this.wrapper.clientHeight;
+        if (scrollHeight > 0) {
+          this.wrapper.scrollTop = Math.round(progress * scrollHeight);
+          this.updatePaginationInfo();
+        }
       }
     }
   }

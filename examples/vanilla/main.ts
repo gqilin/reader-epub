@@ -162,7 +162,7 @@ async function createRenderer(mode: 'paginated' | 'scrolled') {
   annotations.on('annotations:imported', () => saveAnnotationsToLocal());
 
   renderer.on('renderer:paginated', (info) => {
-    if (mode === 'paginated') {
+    if (currentMode === 'paginated') {
       progressInfo.textContent =
         `Page ${info.currentPage + 1} / ${info.totalPages}  |  Chapter ${info.spineIndex + 1} / ${reader!.spine.length}`;
     } else {
@@ -237,18 +237,20 @@ modeButtons.forEach((btnId, i) => {
 
 // Reading mode switching (paginated / scrolled)
 document.getElementById('btn-paginated')!.addEventListener('click', async () => {
-  if (currentMode === 'paginated') return;
+  if (currentMode === 'paginated' || !renderer) return;
   currentMode = 'paginated';
   document.getElementById('btn-paginated')!.classList.add('active');
   document.getElementById('btn-scrolled')!.classList.remove('active');
-  await createRenderer('paginated');
+  await renderer.setMode('paginated');
+  updateFooterUI('paginated');
 });
 document.getElementById('btn-scrolled')!.addEventListener('click', async () => {
-  if (currentMode === 'scrolled') return;
+  if (currentMode === 'scrolled' || !renderer) return;
   currentMode = 'scrolled';
   document.getElementById('btn-scrolled')!.classList.add('active');
   document.getElementById('btn-paginated')!.classList.remove('active');
-  await createRenderer('scrolled');
+  await renderer.setMode('scrolled');
+  updateFooterUI('scrolled');
 });
 
 // Color selection

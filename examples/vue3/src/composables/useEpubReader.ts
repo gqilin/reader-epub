@@ -304,7 +304,7 @@ export function useEpubReader() {
       const match = detectVisibleTocItem(info.spineIndex);
       if (match) activeTocId.value = match.id;
 
-      if (m === 'paginated') {
+      if (currentMode.value === 'paginated') {
         progressText.value =
           `Page ${info.currentPage + 1} / ${info.totalPages}  |  Chapter ${info.spineIndex + 1} / ${reader.value!.spine.length}`;
       } else {
@@ -326,11 +326,11 @@ export function useEpubReader() {
     loadAnnotationsFromLocal();
   }
 
-  async function switchMode(mode: 'paginated' | 'scrolled', container: HTMLElement) {
-    if (currentMode.value === mode) return;
+  async function switchMode(mode: 'paginated' | 'scrolled', _container: HTMLElement) {
+    if (currentMode.value === mode || !renderer.value) return;
     currentMode.value = mode;
     persistSettings({ mode });
-    await createRenderer(container, mode);
+    await renderer.value.setMode(mode);
   }
 
   function prev() {
