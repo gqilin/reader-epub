@@ -8,6 +8,7 @@ import ReaderView from '../components/ReaderView.vue';
 import FooterBar from '../components/FooterBar.vue';
 import RightPanel from '../components/RightPanel.vue';
 import SelectionToolbar from '../components/SelectionToolbar.vue';
+import NoteDialog from '../components/NoteDialog.vue';
 import { useEpubReader } from '../composables/useEpubReader';
 import { consumePendingBuffer } from '../composables/epubStore';
 
@@ -179,6 +180,16 @@ onMounted(() => {
       @add-note="epub.selectionAddNote"
       @copy="epub.selectionCopy"
       @set-color="epub.setSelectedColor"
+    />
+    <NoteDialog
+      :visible="epub.noteDialog.value.visible"
+      :source="epub.noteDialog.value.source"
+      :content="epub.noteDialog.value.content"
+      @confirm="(content) => {
+        epub.noteDialog.value.content = content;
+        epub.confirmNoteDialog();
+      }"
+      @cancel="epub.closeNoteDialog"
     />
   </div>
 </template>

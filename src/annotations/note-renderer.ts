@@ -27,28 +27,46 @@ export class NoteRenderer {
   render(annotation: NoteAnnotation, rects: DOMRect[], targetGroup: SVGGElement): void {
     if (rects.length === 0) return;
 
-    const firstRect = rects[0];
+    // Create clickable area for all text rectangles
+    rects.forEach((rect, index) => {
+      const x = rect.x;
+      const y = rect.y;
+      const width = rect.width;
+      const height = rect.height;
 
-    // Note marker (circle icon at start of range)
-    const marker = document.createElementNS(SVG_NS, 'circle');
-    const cx = firstRect.x;
-    const cy = firstRect.y;
-    const radius = 8;
+      // Transparent rect covering the entire text (for click area)
+      const clickRect = document.createElementNS(SVG_NS, 'rect');
+      clickRect.setAttribute('x', String(x));
+      clickRect.setAttribute('y', String(y));
+      clickRect.setAttribute('width', String(width));
+      clickRect.setAttribute('height', String(height));
+      clickRect.setAttribute('fill', 'transparent');
+      clickRect.style.pointerEvents = 'all';
+      clickRect.style.cursor = 'pointer';
+      clickRect.dataset.annotationId = annotation.id;
+      clickRect.dataset.annotationType = 'note';
+      clickRect.dataset.noteContent = annotation.content;
 
-    marker.setAttribute('cx', String(cx));
-    marker.setAttribute('cy', String(cy));
-    marker.setAttribute('r', String(radius));
-    marker.setAttribute('fill', annotation.color);
-    marker.setAttribute('stroke', '#fff');
-    marker.setAttribute('stroke-width', '2');
-    marker.style.pointerEvents = 'all';
-    marker.style.cursor = 'pointer';
-    marker.dataset.annotationId = annotation.id;
-    marker.dataset.noteContent = annotation.content;
-    marker.dataset.noteX = String(cx);
-    marker.dataset.noteY = String(cy + radius + 8);
+      // Store position for the first rect's underline
+      if (index === 0) {
+        clickRect.dataset.noteX = String(x);
+        clickRect.dataset.noteY = String(y + height + 8);
+      }
 
-    targetGroup.appendChild(marker);
+      targetGroup.appendChild(clickRect);
+
+      // Dashed underline overlay (for visual feedback)
+      const underlineY = y + height - 2;
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', `M ${x} ${underlineY} L ${x + width} ${underlineY}`);
+      path.setAttribute('stroke', annotation.color);
+      path.setAttribute('stroke-width', '2');
+      path.setAttribute('stroke-dasharray', '4,3');
+      path.setAttribute('fill', 'none');
+      path.style.pointerEvents = 'none';
+
+      targetGroup.appendChild(path);
+    });
   }
 
   showPopover(annotationId: string, content: string, x: number, y: number): void {

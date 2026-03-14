@@ -10,6 +10,7 @@ export class InteractionHandler {
   private mode: InteractionMode = 'select';
   private onAnnotationClick: ((id: string, event: MouseEvent) => void) | null = null;
   private onAnnotationHover: ((id: string | null, event: MouseEvent) => void) | null = null;
+  private onNoteEdit: ((id: string, event: MouseEvent) => void) | null = null;
 
   constructor(layer: AnnotationLayer, noteRenderer: NoteRenderer) {
     this.layer = layer;
@@ -44,6 +45,12 @@ export class InteractionHandler {
     this.onAnnotationHover = handler;
   }
 
+  setNoteEditHandler(
+    handler: (id: string, event: MouseEvent) => void
+  ): void {
+    this.onNoteEdit = handler;
+  }
+
   private setupListeners(): void {
     const svg = this.layer.svgElement;
 
@@ -53,17 +60,24 @@ export class InteractionHandler {
       const annotationId = target?.dataset?.annotationId;
 
       if (annotationId) {
-        // Handle note popover
-        const noteContent = target?.dataset?.noteContent;
-        if (noteContent) {
-          const noteX = parseFloat(target?.dataset?.noteX ?? '0');
-          const noteY = parseFloat(target?.dataset?.noteY ?? '0');
-          this.noteRenderer.togglePopover(
-            annotationId,
-            noteContent,
-            noteX,
-            noteY
-          );
+        const annotationType = target?.dataset?.annotationType;
+
+        // Handle note edit
+        if (annotationType === 'note') {
+          this.onNoteEdit?.(annotationId, mouseEvent);
+        } else {
+          // Handle note popover for other annotations
+          const noteContent = target?.dataset?.noteContent;
+          if (noteContent) {
+            const noteX = parseFloat(target?.dataset?.noteX ?? '0');
+            const noteY = parseFloat(target?.dataset?.noteY ?? '0');
+            this.noteRenderer.togglePopover(
+              annotationId,
+              noteContent,
+              noteX,
+              noteY
+            );
+          }
         }
 
         this.onAnnotationClick?.(annotationId, mouseEvent);

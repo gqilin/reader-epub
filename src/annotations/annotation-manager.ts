@@ -72,6 +72,13 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
       const annotation = id ? this.annotations.get(id) ?? null : null;
       this.emit('annotation:hover', { annotation, event });
     });
+
+    this.interactionHandler.setNoteEditHandler((id, event) => {
+      const annotation = this.annotations.get(id);
+      if (annotation && annotation.type === 'note') {
+        this.emit('annotation:edit', { annotation, event });
+      }
+    });
   }
 
   // ── Mode ────────────────────────────────────────────────────
@@ -113,6 +120,15 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
   }
 
   // ── Create annotations from current selection ───────────────
+
+  /**
+   * Capture and cache the current text selection.
+   * Call this before showing any dialog that steals focus (e.g. note input),
+   * so that subsequent addNoteToSelection() can still access the selection.
+   */
+  captureSelection(): boolean {
+    return this.selectionHandler.getSelection() !== null;
+  }
 
   highlightSelection(
     color: HighlightColor = 'yellow',

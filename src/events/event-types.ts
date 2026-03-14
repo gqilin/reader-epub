@@ -46,6 +46,7 @@ export interface AnnotationEvents {
   'annotation:removed': { id: string };
   'annotation:selected': { annotation: Annotation; event: MouseEvent };
   'annotation:hover': { annotation: Annotation | null; event: MouseEvent };
+  'annotation:edit': { annotation: Annotation; event: MouseEvent };
   'annotation:drawing:start': undefined;
   'annotation:drawing:end': { annotation: DrawingAnnotation };
   'annotations:imported': { count: number };

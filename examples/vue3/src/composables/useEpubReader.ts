@@ -115,6 +115,19 @@ export function useEpubReader() {
     cfiRange: { start: '', end: '' },
   });
 
+  // Note dialog state
+  const noteDialog = ref<{
+    visible: boolean;
+    source: 'new' | 'edit';
+    editId: string | null;
+    content: string;
+  }>({
+    visible: false,
+    source: 'new',
+    editId: null,
+    content: '',
+  });
+
   // ── TOC helpers ─────────────────────────────────
 
   /** Collect all TocItems matching a spineIndex (flat, depth-first order) */
@@ -298,6 +311,9 @@ export function useEpubReader() {
       refreshAnnotationList();
     });
     annotations.value.on('annotations:imported', () => saveAnnotationsToLocal());
+    annotations.value.on('annotation:edit', (data) => {
+      openNoteEditDialog(data.annotation.id, (data.annotation as any).content);
+    });
 
     renderer.value.on('renderer:paginated', (info: PaginationInfo) => {
       // Detect the most specific visible TOC section
@@ -367,6 +383,35 @@ export function useEpubReader() {
   function addNote() {
     const content = prompt('Enter note:');
     if (content) annotations.value?.addNoteToSelection(content);
+  }
+
+  function openNoteEditDialog(editId: string, content: string) {
+    noteDialog.value = {
+      visible: true,
+      source: 'edit',
+      editId,
+      content,
+    };
+  }
+
+  function confirmNoteDialog() {
+    if (noteDialog.value.source === 'new') {
+      if (noteDialog.value.content) {
+        annotations.value?.addNoteToSelection(noteDialog.value.content);
+      }
+    } else if (noteDialog.value.source === 'edit' && noteDialog.value.editId) {
+      annotations.value?.updateNoteContent(noteDialog.value.editId, noteDialog.value.content);
+    }
+    closeNoteDialog();
+  }
+
+  function closeNoteDialog() {
+    noteDialog.value = {
+      visible: false,
+      source: 'new',
+      editId: null,
+      content: '',
+    };
   }
 
   function exportAnnotations() {
@@ -509,13 +554,16 @@ export function useEpubReader() {
   }
 
   function selectionAddNote() {
-    const content = prompt('Enter note:');
-    if (content) {
-      annotations.value?.addNoteToSelection(content);
-    } else {
-      // User cancelled, dismiss toolbar
-      renderer.value?.dismissSelectionToolbar();
-    }
+    // Capture selection before dialog steals focus
+    annotations.value?.captureSelection();
+
+    // Open note dialog in "new" mode
+    noteDialog.value = {
+      visible: true,
+      source: 'new',
+      editId: null,
+      content: '',
+    };
   }
 
   function selectionCopy() {
@@ -553,6 +601,7 @@ export function useEpubReader() {
     fontSize,
     lineHeight,
     selectionToolbar,
+    noteDialog,
 
     // Methods
     loadFile,
@@ -587,5 +636,8 @@ export function useEpubReader() {
     selectionAddNote,
     selectionCopy,
     dismissSelectionToolbar,
+    openNoteEditDialog,
+    confirmNoteDialog,
+    closeNoteDialog,
   };
 }
