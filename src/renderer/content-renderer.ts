@@ -113,14 +113,17 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
     // Build CSS
     const rect = this.wrapper.getBoundingClientRect();
+    const pad = this.styleInjector.getContentPadding();
+    const contentWidth = rect.width - pad.left - pad.right;
+    const contentHeight = rect.height - pad.top - pad.bottom;
     let css = bookStyles + '\n';
     css += this.styleInjector.buildContentStyles() + '\n';
 
     if (this.options.mode === 'paginated') {
       css += this.styleInjector.buildPaginationStyles(
-        rect.width,
+        contentWidth,
         this.paginator.columnGap,
-        rect.height
+        contentHeight
       );
     } else {
       css += this.styleInjector.buildScrolledStyles();
@@ -134,7 +137,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     await this.waitForImages();
 
     if (this.options.mode === 'paginated') {
-      this.paginator.apply(this.contentEl, rect.width, rect.height);
+      this.paginator.apply(this.contentEl, contentWidth, contentHeight);
       this.paginator.goToPage(0);
     } else {
       this.wrapper.scrollTop = 0;
@@ -353,7 +356,10 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     });
 
     if (this.options.mode === 'paginated') {
-      this.paginator.apply(this.contentEl, rect.width, rect.height);
+      const pad = this.styleInjector.getContentPadding();
+      const contentWidth = rect.width - pad.left - pad.right;
+      const contentHeight = rect.height - pad.top - pad.bottom;
+      this.paginator.apply(this.contentEl, contentWidth, contentHeight);
       this.updatePaginationInfo();
     } else {
       this.updatePaginationInfo();
@@ -488,6 +494,9 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
   private applyStyles(): void {
     const rect = this.wrapper.getBoundingClientRect();
+    const pad = this.styleInjector.getContentPadding();
+    const contentWidth = rect.width - pad.left - pad.right;
+    const contentHeight = rect.height - pad.top - pad.bottom;
 
     // Preserve book-level CSS already in <style>
     const bookCss = this.extractBookCssFromStyleEl();
@@ -497,9 +506,9 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
     if (this.options.mode === 'paginated') {
       css += this.styleInjector.buildPaginationStyles(
-        rect.width,
+        contentWidth,
         this.paginator.columnGap,
-        rect.height
+        contentHeight
       );
       // Re-measure pagination, then refresh annotations after reflow
       requestAnimationFrame(() => {
@@ -799,13 +808,18 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
       };
     }
 
+    // Sync annotation SVG transform after page change
+    if (this.options.mode === 'paginated') {
+      this._annotations?.syncPaginatedLayout();
+    }
+
     this.emit('renderer:paginated', this._pagination);
   }
 
   private scrollToElement(el: Element): void {
     const rect = el.getBoundingClientRect();
     const wrapperRect = this.wrapper.getBoundingClientRect();
-    const pageWidth = wrapperRect.width + this.paginator.columnGap;
+    const pageWidth = this.paginator.current.pageWidth;
     const page = Math.floor((rect.left - wrapperRect.left) / pageWidth);
     this.paginator.goToPage(page);
     this.updatePaginationInfo();
@@ -823,7 +837,7 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
 
     if (this.options.mode === 'paginated') {
       const wrapperRect = this.wrapper.getBoundingClientRect();
-      const pageWidth = wrapperRect.width + this.paginator.columnGap;
+      const pageWidth = this.paginator.current.pageWidth;
       const page = Math.floor((rect.left - wrapperRect.left) / pageWidth);
       this.paginator.goToPage(page);
       this.updatePaginationInfo();

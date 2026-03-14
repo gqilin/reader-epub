@@ -277,7 +277,51 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
 
     if (this.renderer.mode === 'scrolled') {
       this.layer.syncSize();
+    } else if (this.renderer.mode === 'paginated') {
+      this.layer.syncPaginatedLayout();
     }
+  }
+
+  /**
+   * Sync annotation SVG layer for paginated mode.
+   * Call after page changes so SVG width and translateX match the content.
+   */
+  syncPaginatedLayout(): void {
+    if (this.renderer.mode === 'paginated') {
+      this.layer.syncPaginatedLayout();
+    }
+  }
+
+  // ── Navigate ────────────────────────────────────────────────
+
+  /**
+   * Navigate to the specified annotation and flash it so the user
+   * can quickly locate the marked position.
+   *
+   * Returns `true` if navigation succeeded, `false` if the annotation
+   * was not found or is not navigable (e.g. a drawing without text anchor).
+   */
+  async navigateToAnnotation(id: string): Promise<boolean> {
+    const annotation = this.annotations.get(id);
+    if (!annotation) return false;
+
+    // Drawing annotations have no text anchor — can only jump to the chapter
+    if (annotation.type === 'drawing') {
+      if (annotation.spineIndex !== this.renderer.spineIndex) {
+        await this.renderer.display(annotation.spineIndex);
+      }
+      return true;
+    }
+
+    // Navigate to the annotation's CFI position
+    await this.renderer.goToCfi(annotation.anchor.startCfi);
+
+    // Flash the annotation after navigation settles
+    requestAnimationFrame(() => {
+      this.layer.flashAnnotation(id);
+    });
+
+    return true;
   }
 
   // ── Remove ──────────────────────────────────────────────────
@@ -330,6 +374,8 @@ export class AnnotationManager extends TypedEventEmitter<AnnotationEvents> {
     // Sync SVG size in scrolled mode
     if (this.renderer.mode === 'scrolled') {
       this.layer.syncSize();
+    } else if (this.renderer.mode === 'paginated') {
+      this.layer.syncPaginatedLayout();
     }
 
     // Mount SVG group and render annotations

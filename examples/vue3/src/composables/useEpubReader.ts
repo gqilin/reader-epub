@@ -462,12 +462,8 @@ export function useEpubReader() {
 
   // ── Annotation navigation ─────────────────────
   async function goToAnnotation(annotation: Annotation) {
-    if (!renderer.value) return;
-    if ('anchor' in annotation) {
-      await renderer.value.goToCfi(annotation.anchor.startCfi);
-    } else {
-      await renderer.value.display(annotation.spineIndex);
-    }
+    if (!annotations.value) return;
+    await annotations.value.navigateToAnnotation(annotation.id);
   }
 
   function removeAnnotation(id: string) {

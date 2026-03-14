@@ -16,6 +16,17 @@ export class StyleInjector {
     return { ...this.theme };
   }
 
+  getContentPadding(): { top: number; right: number; bottom: number; left: number } {
+    const t = this.theme;
+    if (t.padding) {
+      if (typeof t.padding === 'number') {
+        return { top: t.padding, right: t.padding, bottom: t.padding, left: t.padding };
+      }
+      return { top: t.padding.top, right: t.padding.right, bottom: t.padding.bottom, left: t.padding.left };
+    }
+    return { top: 24, right: 16, bottom: 24, left: 16 };
+  }
+
   setCustomCSS(css: string): void {
     this.customCss = css;
   }
@@ -24,12 +35,18 @@ export class StyleInjector {
     const t = this.theme;
     let css = '';
 
-    // Base reset
+    // Base reset — padding on :host (wrapper) so it doesn't affect column pagination
+    const pad = this.getContentPadding();
+    const hostRules: string[] = [
+      'display: block',
+      'position: relative',
+      'box-sizing: border-box',
+      `padding: ${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px !important`,
+    ];
+    if (t.backgroundColor) hostRules.push(`background-color: ${t.backgroundColor}`);
+
+    css += `:host { ${hostRules.join('; ')}; }`;
     css += `
-      :host {
-        display: block;
-        position: relative;
-      }
       .epub-body {
         margin: 0;
         word-wrap: break-word;
@@ -71,21 +88,8 @@ export class StyleInjector {
       css += `.epub-body, .epub-body * { ${overrideRules.join('; ')}; }`;
     }
 
-    // Body-only rules (background, padding — should not cascade to children)
+    // Body-only rules (background — should not cascade to children)
     if (t.backgroundColor) bodyRules.push(`background-color: ${t.backgroundColor}`);
-
-    // Padding
-    if (t.padding) {
-      if (typeof t.padding === 'number') {
-        bodyRules.push(`padding: ${t.padding}px`);
-      } else {
-        bodyRules.push(
-          `padding: ${t.padding.top}px ${t.padding.right}px ${t.padding.bottom}px ${t.padding.left}px`
-        );
-      }
-    } else {
-      bodyRules.push('padding: 24px 16px');
-    }
 
     if (bodyRules.length > 0) {
       css += `.epub-body { ${bodyRules.join('; ')}; }`;
@@ -121,7 +125,7 @@ export class StyleInjector {
         column-width: ${columnWidth}px;
         column-gap: ${gap}px;
         column-fill: auto;
-        overflow: hidden;
+        overflow: visible;
         box-sizing: border-box;
       }
     `;

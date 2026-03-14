@@ -15,6 +15,7 @@ export class AnnotationLayer {
   private svg: SVGSVGElement;
   private renderer: ContentRenderer;
   private chapterGroups = new Map<string, ChapterSvgGroup>();
+  private animStyle: HTMLStyleElement;
 
   constructor(renderer: ContentRenderer) {
     this.renderer = renderer;
@@ -23,6 +24,19 @@ export class AnnotationLayer {
     this.svg.classList.add('epub-annotation-layer');
     this.svg.style.cssText =
       'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;';
+
+    // Flash animation styles for navigateToAnnotation
+    this.animStyle = document.createElement('style');
+    this.animStyle.textContent = `
+      @keyframes epub-annotation-flash {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      .epub-annotation-flash {
+        animation: epub-annotation-flash 0.8s ease-in-out 3;
+      }
+    `;
+    renderer.contentShadowRoot.appendChild(this.animStyle);
 
     // Append SVG into the shadow root (must be inside shadow DOM to be visible)
     renderer.contentShadowRoot.appendChild(this.svg);
@@ -84,15 +98,15 @@ export class AnnotationLayer {
 
   /**
    * Transform a DOMRect from viewport coordinates to SVG overlay coordinates.
+   * Uses the SVG's own bounding rect so coordinates are always correct
+   * regardless of padding, margin, scroll or CSS transforms.
    */
   transformRect(rect: DOMRect): DOMRect {
-    const wrapperRect = this.renderer.wrapperElement.getBoundingClientRect();
-    const scrollTop = this.renderer.wrapperElement.scrollTop;
-    const scrollLeft = this.renderer.wrapperElement.scrollLeft;
+    const svgRect = this.svg.getBoundingClientRect();
 
     return new DOMRect(
-      rect.x - wrapperRect.left + scrollLeft,
-      rect.y - wrapperRect.top + scrollTop,
+      rect.x - svgRect.left,
+      rect.y - svgRect.top,
       rect.width,
       rect.height
     );
@@ -113,6 +127,18 @@ export class AnnotationLayer {
     return result;
   }
 
+  /**
+   * Position SVG at the content element's origin.
+   * Uses offsetLeft/offsetTop which account for wrapper padding AND
+   * any content margin from the book's CSS, and are unaffected by
+   * CSS transforms (important for paginated mode).
+   */
+  private positionSvgAtContent(): void {
+    const content = this.renderer.contentElement;
+    this.svg.style.left = `${content.offsetLeft}px`;
+    this.svg.style.top = `${content.offsetTop}px`;
+  }
+
   setDrawingMode(enabled: boolean): void {
     this.svg.style.pointerEvents = enabled ? 'all' : 'none';
     // Also enable pointer events on all chapter drawing groups
@@ -128,14 +154,51 @@ export class AnnotationLayer {
    */
   syncSize(): void {
     const content = this.renderer.contentElement;
+    this.positionSvgAtContent();
     this.svg.style.width = `${content.scrollWidth}px`;
     this.svg.style.height = `${content.scrollHeight}px`;
+    this.svg.style.transform = '';
+  }
+
+  /**
+   * Sync SVG width and transform for paginated mode.
+   * Width covers all column pages; transform matches content's translateX.
+   */
+  syncPaginatedLayout(): void {
+    const content = this.renderer.contentElement;
+    this.positionSvgAtContent();
+    this.svg.style.width = `${content.scrollWidth}px`;
+    this.svg.style.height = `${content.offsetHeight}px`;
+    this.svg.style.transform = content.style.transform;
   }
 
   /** Remove a single annotation's SVG elements by id (searches all chapters). */
   removeById(id: string): void {
     const els = this.svg.querySelectorAll(`[data-annotation-id="${id}"]`);
     els.forEach((el) => el.remove());
+  }
+
+  /**
+   * Apply a flash/blink animation to an annotation's SVG elements
+   * so the user can quickly locate the annotation after navigation.
+   */
+  flashAnnotation(id: string): void {
+    const els = this.svg.querySelectorAll(`[data-annotation-id="${id}"]`);
+    if (els.length === 0) return;
+
+    // Remove existing flash class (in case of rapid re-trigger)
+    els.forEach((el) => el.classList.remove('epub-annotation-flash'));
+
+    // Force reflow then add animation class
+    requestAnimationFrame(() => {
+      els.forEach((el) => el.classList.add('epub-annotation-flash'));
+    });
+
+    // Clean up class after animation completes
+    const onEnd = () => {
+      els.forEach((el) => el.classList.remove('epub-annotation-flash'));
+    };
+    els[0].addEventListener('animationend', onEnd, { once: true });
   }
 
   /** Clear all chapter groups. */
@@ -147,6 +210,7 @@ export class AnnotationLayer {
   }
 
   destroy(): void {
+    this.animStyle.remove();
     this.svg.remove();
   }
 }
