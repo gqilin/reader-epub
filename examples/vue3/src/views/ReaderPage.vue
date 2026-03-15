@@ -9,6 +9,7 @@ import FooterBar from '../components/FooterBar.vue';
 import RightPanel from '../components/RightPanel.vue';
 import SelectionToolbar from '../components/SelectionToolbar.vue';
 import NoteDialog from '../components/NoteDialog.vue';
+import ImagePreview from '../components/ImagePreview.vue';
 import { useEpubReader } from '../composables/useEpubReader';
 import { consumePendingBuffer } from '../composables/epubStore';
 
@@ -190,6 +191,12 @@ onMounted(() => {
         epub.confirmNoteDialog();
       }"
       @cancel="epub.closeNoteDialog"
+    />
+    <ImagePreview
+      :visible="epub.imagePreview.value.visible"
+      :src="epub.imagePreview.value.src"
+      :alt="epub.imagePreview.value.alt"
+      @close="epub.closeImagePreview"
     />
   </div>
 </template>

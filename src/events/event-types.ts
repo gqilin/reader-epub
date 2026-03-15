@@ -37,6 +37,11 @@ export interface RendererEvents {
     isExternal: boolean;
     event: MouseEvent;
   };
+  'renderer:image-click': {
+    src: string;
+    alt: string;
+    event: MouseEvent;
+  };
   'renderer:error': { error: Error };
 }
 

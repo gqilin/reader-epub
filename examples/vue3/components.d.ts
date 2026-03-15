@@ -29,6 +29,7 @@ declare module 'vue' {
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     FooterBar: typeof import('./src/components/FooterBar.vue')['default']
+    ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     NoteDialog: typeof import('./src/components/NoteDialog.vue')['default']
     ReaderView: typeof import('./src/components/ReaderView.vue')['default']
     RightPanel: typeof import('./src/components/RightPanel.vue')['default']

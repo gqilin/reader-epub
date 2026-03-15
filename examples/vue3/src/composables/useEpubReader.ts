@@ -128,6 +128,17 @@ export function useEpubReader() {
     content: '',
   });
 
+  // Image preview state
+  const imagePreview = ref<{
+    visible: boolean;
+    src: string;
+    alt: string;
+  }>({
+    visible: false,
+    src: '',
+    alt: '',
+  });
+
   // ── TOC helpers ─────────────────────────────────
 
   /** Collect all TocItems matching a spineIndex (flat, depth-first order) */
@@ -334,6 +345,14 @@ export function useEpubReader() {
       selectionToolbar.value = { ...data };
     });
 
+    renderer.value.on('renderer:image-click', (data) => {
+      imagePreview.value = {
+        visible: true,
+        src: data.src,
+        alt: data.alt,
+      };
+    });
+
     const spineIndex = Math.max(0, Math.min(prevSpineIndex, reader.value.spine.length - 1));
     if (reader.value.spine.length > 0) {
       await renderer.value.display(spineIndex);
@@ -411,6 +430,14 @@ export function useEpubReader() {
       source: 'new',
       editId: null,
       content: '',
+    };
+  }
+
+  function closeImagePreview() {
+    imagePreview.value = {
+      visible: false,
+      src: '',
+      alt: '',
     };
   }
 
@@ -602,6 +629,7 @@ export function useEpubReader() {
     lineHeight,
     selectionToolbar,
     noteDialog,
+    imagePreview,
 
     // Methods
     loadFile,
@@ -639,5 +667,6 @@ export function useEpubReader() {
     openNoteEditDialog,
     confirmNoteDialog,
     closeNoteDialog,
+    closeImagePreview,
   };
 }

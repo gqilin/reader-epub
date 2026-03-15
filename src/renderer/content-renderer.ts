@@ -462,6 +462,25 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
   }
 
   /**
+   * Intercept <img> clicks inside epub content and emit image-click event.
+   */
+  private handleImageClick(event: MouseEvent): void {
+    let target = event.target as HTMLElement | null;
+    while (target && target !== this.contentEl) {
+      if (target.tagName === 'IMG') break;
+      target = target.parentElement;
+    }
+    if (!target || target.tagName !== 'IMG') return;
+
+    const img = target as HTMLImageElement;
+    this.emit('renderer:image-click', {
+      src: img.src,
+      alt: img.alt || '',
+      event,
+    });
+  }
+
+  /**
    * Intercept <a> tag clicks inside epub content.
    * - Fragment-only links (#id): scroll within the current chapter
    * - Internal cross-chapter links (chapter2.xhtml#section): navigate to that chapter
@@ -739,8 +758,9 @@ export class ContentRenderer extends TypedEventEmitter<RendererEvents> {
     };
     this.contentEl.addEventListener('touchend', touchendHandler);
 
-    // click: dismiss toolbar when clicking without selection + handle links + emit click event
+    // click: dismiss toolbar when clicking without selection + handle links + handle images + emit click event
     this.contentEl.addEventListener('click', (event) => {
+      this.handleImageClick(event as MouseEvent);
       this.handleLinkClick(event as MouseEvent);
       this.emit('renderer:click', { event: event as MouseEvent });
     });
